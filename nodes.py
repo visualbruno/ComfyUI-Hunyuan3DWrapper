@@ -1,15 +1,10 @@
 import os
 import torch
-import gc
+from PIL import Image
 from pathlib import Path
 import numpy as np
 
 from .hy3dgen.shapegen import Hunyuan3DDiTFlowMatchingPipeline, FaceReducer, FloaterRemover, DegenerateFaceRemover
-from .hy3dgen.texgen import Hunyuan3DPaintPipeline
-from .hy3dgen.texgen.utils.dehighlight_utils import Light_Shadow_Remover
-
-from accelerate import init_empty_weights
-from accelerate.utils import set_module_tensor_to_device
 
 import folder_paths
 
@@ -46,7 +41,6 @@ class Hy3DModelLoader:
         config_path = os.path.join(script_directory, "configs", "dit_config.yaml")
         model_path = folder_paths.get_full_path("diffusion_models", model)
         pipe = Hunyuan3DDiTFlowMatchingPipeline.from_single_file(ckpt_path=model_path, config_path=config_path, use_safetensors=True, device=device)
-        
         return (pipe,)
 
 class DownloadAndLoadHy3DDelightModel:
@@ -89,6 +83,7 @@ class DownloadAndLoadHy3DDelightModel:
         )
         delight_pipe.scheduler = EulerAncestralDiscreteScheduler.from_config(delight_pipe.scheduler.config)
         delight_pipe = delight_pipe.to(device, torch.float16)
+        delight_pipe.enable_model_cpu_offload()
         
         return (delight_pipe,)
     
@@ -120,7 +115,7 @@ class Hy3DDelightImage:
 
         image = image.permute(0, 3, 1, 2).to(device)
 
-        delight_pipe = delight_pipe.to(device)
+        #delight_pipe = delight_pipe.to(device)
 
         image = delight_pipe(
             prompt="",
@@ -134,7 +129,7 @@ class Hy3DDelightImage:
             output_type="pt"
         ).images[0]
 
-        delight_pipe = delight_pipe.to(offload_device)
+        #delight_pipe = delight_pipe.to(offload_device)
 
         out_tensor = image.unsqueeze(0).permute(0, 2, 3, 1).cpu().float()
         
@@ -180,7 +175,7 @@ class DownloadAndLoadHy3DPaintModel:
             torch_dtype=torch.float16)
 
         pipeline.scheduler = EulerAncestralDiscreteScheduler.from_config(pipeline.scheduler.config, timestep_spacing='trailing')
-        
+        pipeline.enable_model_cpu_offload()
         return (pipeline,)
 
 class Hy3DRenderMultiView:
@@ -251,7 +246,7 @@ class Hy3DRenderMultiView:
         normal_image = [[control_images[i] for i in range(num_view)]]
         position_image = [[control_images[i + num_view] for i in range(num_view)]]
 
-        pipeline = pipeline.to(device)
+        #pipeline = pipeline.to(device)
 
         multiview_images = pipeline(
             input_image,
@@ -267,7 +262,7 @@ class Hy3DRenderMultiView:
             output_type="pt",
             ).images
         
-        pipeline = pipeline.to(offload_device)
+        #pipeline = pipeline.to(offload_device)
 
         out_tensors = multiview_images.permute(0, 2, 3, 1).cpu().float()
         
@@ -301,8 +296,8 @@ class Hy3DBakeFromMultiview:
             },
         }
 
-    RETURN_TYPES = ("HY3DMESH",)
-    RETURN_NAMES = ("mesh",)
+    RETURN_TYPES = ("HY3DMESH", "IMAGE", )
+    RETURN_NAMES = ("mesh", "texture",)
     FUNCTION = "process"
     CATEGORY = "Hunyuan3DWrapper"
 
@@ -310,16 +305,17 @@ class Hy3DBakeFromMultiview:
         device = mm.get_torch_device()
         self.render = renderer
 
-        multiviews = images.permute(0, 3, 1, 2).to(device)
-
-        device = mm.get_torch_device()
+        multiviews = images.permute(0, 3, 1, 2)
+        multiviews = multiviews.cpu().numpy()
+        multiviews_pil = [Image.fromarray((image.transpose(1, 2, 0) * 255).astype(np.uint8)) for image in multiviews]
 
         selected_camera_azims = [0, 90, 180, 270, 0, 180]
         selected_camera_elevs = [0, 0, 0, 0, 90, -90]
         selected_view_weights = [1, 0.1, 0.5, 0.1, 0.05, 0.05]
         merge_method = 'fast'
+        self.bake_exp = 4
         
-        texture, mask = self.bake_from_multiview(multiviews,
+        texture, mask = self.bake_from_multiview(multiviews_pil,
                                                  selected_camera_elevs, selected_camera_azims, selected_view_weights,
                                                  method=merge_method)
         
@@ -327,11 +323,12 @@ class Hy3DBakeFromMultiview:
 
         texture_np = self.render.uv_inpaint(texture, mask_np)
         texture = torch.tensor(texture_np / 255).float().to(texture.device)
+        print(texture.shape)
 
         self.render.set_texture(texture)
         textured_mesh = self.render.save_mesh()
         
-        return (textured_mesh,)
+        return (textured_mesh, texture.unsqueeze(0).cpu().float(),)
     
     def bake_from_multiview(self, views, camera_elevs,
                             camera_azims, view_weights, method='graphcut'):
@@ -341,7 +338,7 @@ class Hy3DBakeFromMultiview:
             views, camera_elevs, camera_azims, view_weights):
             project_texture, project_cos_map, project_boundary_map = self.render.back_project(
                 view, camera_elev, camera_azim)
-            project_cos_map = weight * (project_cos_map ** self.config.bake_exp)
+            project_cos_map = weight * (project_cos_map ** self.bake_exp)
             project_textures.append(project_texture)
             project_weighted_cos_maps.append(project_cos_map)
             project_boundary_maps.append(project_boundary_map)

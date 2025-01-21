@@ -32,6 +32,7 @@ from einops import rearrange, repeat
 from skimage import measure
 from tqdm import tqdm
 
+from comfy.utils import ProgressBar
 
 class FourierEmbedder(nn.Module):
     """The sin/cosine positional embedding. Given an input tensor `x` of shape [n_batch, ..., c_dim], it converts
@@ -579,6 +580,7 @@ class ShapeVAE(nn.Module):
         # 2. latents to 3d volume
         batch_logits = []
         batch_size = latents.shape[0]
+        comfy_pbar = ProgressBar(num_chunks * xyz_samples.shape[0])
         for start in tqdm(range(0, xyz_samples.shape[0], num_chunks),
                           desc=f"MC Level {mc_level} Implicit Function:"):
             queries = xyz_samples[start: start + num_chunks, :].to(device)
@@ -591,6 +593,7 @@ class ShapeVAE(nn.Module):
                 logits = torch.sigmoid(logits) * 2 - 1
                 print(f'Training with soft labels, inference with sigmoid and marching cubes level 0.')
             batch_logits.append(logits)
+            comfy_pbar.update(1)
         grid_logits = torch.cat(batch_logits, dim=1)
         grid_logits = grid_logits.view((batch_size, grid_size[0], grid_size[1], grid_size[2])).float()
 

@@ -1,0 +1,12 @@
+trimesh
+diffusers
+accelerate
+huggingface_hub
+einops
+opencv-python
+transformers
+xatlas
+pymeshlab
+pygltflib
+scikit-learn
+scikit-image
