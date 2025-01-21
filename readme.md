@@ -15,11 +15,17 @@ Rest of the models are diffusers models, so they are wrapped and autodownloaded 
 
 ```
 pip install -r requirements.txt
-# for texture (Linux only for now)
+```
+
+UNTESTED! For the texturegen part compilation is needed, I have included my compilations as wheels:
+
+- Windows 11 python3.12 cu126 (works with torch build on 124)
+
+Compilation:
 cd hy3dgen/texgen/custom_rasterizer
-python3 setup.py install
+python setup.py install
 cd hy3dgen/texgen/differentiable_renderer
-bash compile_mesh_painter.sh
+python setup.py install
 ```
 
 ![alt text](image.png)
