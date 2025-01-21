@@ -23,6 +23,7 @@
 # by Tencent in accordance with TENCENT HUNYUAN COMMUNITY LICENSE AGREEMENT.
 
 import tempfile
+import os
 from typing import Union
 
 import pymeshlab
@@ -63,32 +64,70 @@ def remove_floater(mesh: pymeshlab.MeshSet):
 
 
 def pymeshlab2trimesh(mesh: pymeshlab.MeshSet):
-    with tempfile.NamedTemporaryFile(suffix='.ply', delete=True) as temp_file:
-        mesh.save_current_mesh(temp_file.name)
-        mesh = trimesh.load(temp_file.name)
-    # 检查加载的对象类型
-    if isinstance(mesh, trimesh.Scene):
-        combined_mesh = trimesh.Trimesh()
-        # 如果是Scene，遍历所有的geometry并合并
-        for geom in mesh.geometry.values():
-            combined_mesh = trimesh.util.concatenate([combined_mesh, geom])
-        mesh = combined_mesh
-    return mesh
+    # Create temp directory with explicit permissions
+    temp_dir = os.path.join(os.getcwd(), 'temp')
+    os.makedirs(temp_dir, exist_ok=True)
+    
+    try:
+        temp_path = os.path.join(temp_dir, 'temp_mesh.ply')
+        
+        # Save and load mesh
+        mesh.save_current_mesh(temp_path)
+        loaded_mesh = trimesh.load(temp_path)
+        
+        # Check loaded object type
+        if isinstance(loaded_mesh, trimesh.Scene):
+            combined_mesh = trimesh.Trimesh()
+            # If Scene, iterate through all geometries and combine
+            for geom in loaded_mesh.geometry.values():
+                combined_mesh = trimesh.util.concatenate([combined_mesh, geom])
+            loaded_mesh = combined_mesh
+            
+        # Cleanup
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+            
+        return loaded_mesh
+        
+    except Exception as e:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+        raise Exception(f"Error in pymeshlab2trimesh: {str(e)}")
 
 
 def trimesh2pymeshlab(mesh: trimesh.Trimesh):
-    with tempfile.NamedTemporaryFile(suffix='.ply', delete=True) as temp_file:
+    # Create temp directory with explicit permissions
+    temp_dir = os.path.join(os.getcwd(), 'temp')
+    os.makedirs(temp_dir, exist_ok=True)
+    
+    try:
+        temp_path = os.path.join(temp_dir, 'temp_mesh.ply')
+        
+        # Handle scene with multiple geometries
         if isinstance(mesh, trimesh.scene.Scene):
+            temp_mesh = None
             for idx, obj in enumerate(mesh.geometry.values()):
                 if idx == 0:
                     temp_mesh = obj
                 else:
                     temp_mesh = temp_mesh + obj
             mesh = temp_mesh
-        mesh.export(temp_file.name)
-        mesh = pymeshlab.MeshSet()
-        mesh.load_new_mesh(temp_file.name)
-    return mesh
+            
+        # Export and load mesh
+        mesh.export(temp_path)
+        mesh_set = pymeshlab.MeshSet()
+        mesh_set.load_new_mesh(temp_path)
+        
+        # Cleanup
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+            
+        return mesh_set
+        
+    except Exception as e:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+        raise Exception(f"Error in trimesh2pymeshlab: {str(e)}")
 
 
 def export_mesh(input, output):
@@ -148,10 +187,22 @@ class DegenerateFaceRemover:
     ) -> Union[pymeshlab.MeshSet, trimesh.Trimesh, Latent2MeshOutput]:
         ms = import_mesh(mesh)
 
-        with tempfile.NamedTemporaryFile(suffix='.ply', delete=True) as temp_file:
-            ms.save_current_mesh(temp_file.name)
+        # Create temp file with explicit closing
+        temp_file = tempfile.NamedTemporaryFile(suffix='.ply', delete=False)
+        temp_file_path = temp_file.name
+        temp_file.close()
+
+        try:
+            ms.save_current_mesh(temp_file_path)
             ms = pymeshlab.MeshSet()
-            ms.load_new_mesh(temp_file.name)
+            ms.load_new_mesh(temp_file_path)
+        finally:
+            # Ensure temp file is removed
+            if os.path.exists(temp_file_path):
+                try:
+                    os.remove(temp_file_path)
+                except:
+                    pass
 
         mesh = export_mesh(mesh, ms)
         return mesh
