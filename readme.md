@@ -12,11 +12,11 @@ to `ComfyUI/diffusion_models/`
 Rest of the models are diffusers models, so they are wrapped and autodownloaded for now.
 
 # Installation
-Dependencies:
-```
-pip install -r requirements.txt
+Dependencies, in your python env:
 
-portable:
+`pip install -r requirements.txt`
+
+or with portable:
 
 `python_embeded\python.exe -m pip install -r ComfyUI\custom_nodes\ComfyUI-Hunyuan3DWrapper\requirements.txt`
 ```
