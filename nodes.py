@@ -24,9 +24,6 @@ class Hy3DModelLoader:
         return {
             "required": {
                 "model": (folder_paths.get_filename_list("diffusion_models"), {"tooltip": "These models are loaded from the 'ComfyUI/models/diffusion_models' -folder",}),
-
-            "base_precision": (["fp32", "bf16"], {"default": "bf16"}),
-            "load_device": (["main_device", "offload_device"], {"default": "main_device"}),
             },
         }
 
@@ -35,7 +32,7 @@ class Hy3DModelLoader:
     FUNCTION = "loadmodel"
     CATEGORY = "Hunyuan3DWrapper"
 
-    def loadmodel(self, model, base_precision, load_device):
+    def loadmodel(self, model):
         device = mm.get_torch_device()
 
         config_path = os.path.join(script_directory, "configs", "dit_config.yaml")

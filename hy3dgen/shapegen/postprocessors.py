@@ -31,6 +31,8 @@ import trimesh
 
 from .models.vae import Latent2MeshOutput
 
+import folder_paths
+
 
 def load_mesh(path):
     if path.endswith(".glb"):
@@ -65,7 +67,7 @@ def remove_floater(mesh: pymeshlab.MeshSet):
 
 def pymeshlab2trimesh(mesh: pymeshlab.MeshSet):
     # Create temp directory with explicit permissions
-    temp_dir = os.path.join(os.getcwd(), 'temp')
+    temp_dir = folder_paths.temp_directory
     os.makedirs(temp_dir, exist_ok=True)
     
     try:
@@ -97,7 +99,7 @@ def pymeshlab2trimesh(mesh: pymeshlab.MeshSet):
 
 def trimesh2pymeshlab(mesh: trimesh.Trimesh):
     # Create temp directory with explicit permissions
-    temp_dir = os.path.join(os.getcwd(), 'temp')
+    temp_dir = folder_paths.temp_directory
     os.makedirs(temp_dir, exist_ok=True)
     
     try:
