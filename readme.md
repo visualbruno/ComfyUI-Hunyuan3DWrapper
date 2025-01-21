@@ -17,15 +17,17 @@ Rest of the models are diffusers models, so they are wrapped and autodownloaded 
 pip install -r requirements.txt
 ```
 
-UNTESTED! For the texturegen part compilation is needed, I have included my compilations as wheels:
+UNTESTED! For the texturegen part compilation is needed, I have included my compilations as a wheel for the rasterizer, and compiled .pyd for the mesh_processor, these are compiled for:
 
 - Windows 11 python3.12 cu126 (works with torch build on 124)
 
-Compilation:
+For anything else you need to compile yourself:
+
 cd hy3dgen/texgen/custom_rasterizer
 python setup.py install
+
 cd hy3dgen/texgen/differentiable_renderer
-python setup.py install
+python setup.py build_ext --inplace
 ```
 
 ![alt text](image.png)
