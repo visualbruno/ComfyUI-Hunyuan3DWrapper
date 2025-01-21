@@ -11,7 +11,7 @@ to `ComfyUI/diffusion_models/`
 
 Rest of the models are diffusers models, so they are wrapped and autodownloaded for now.
 
-
+# Installation
 Dependencies:
 ```
 pip install -r requirements.txt
@@ -34,6 +34,7 @@ This was tested to work on latest ComfyUI portable install
 
 For anything else you need to compile yourself:
 
+```
 cd hy3dgen/texgen/custom_rasterizer
 python setup.py install
 
