@@ -183,7 +183,7 @@ class DownloadAndLoadHy3DPaintModel:
         
         return (pipeline,)
 
-class Hy3DPaintMesh:
+class Hy3DRenderMultiView:
     @classmethod
     def INPUT_TYPES(s):
         return {
@@ -199,15 +199,14 @@ class Hy3DPaintMesh:
             },
         }
 
-    RETURN_TYPES = ("IMAGE",)
-    RETURN_NAMES = ("image",)
+    RETURN_TYPES = ("IMAGE", "MESHRENDER")
+    RETURN_NAMES = ("image", "renderer")
     FUNCTION = "process"
     CATEGORY = "Hunyuan3DWrapper"
 
     def process(self, pipeline, image, mesh, view_size, render_size, texture_size, seed, steps):
         device = mm.get_torch_device()
         mm.soft_empty_cache()
-        np.random.seed(seed)
         torch.manual_seed(seed)
         generator=torch.Generator(device=pipeline.device).manual_seed(seed)
 
@@ -218,7 +217,6 @@ class Hy3DPaintMesh:
             texture_size=texture_size)
 
         input_image = image.permute(0, 3, 1, 2).unsqueeze(0).to(device)
-        print(input_image.shape)
 
         device = mm.get_torch_device()
         offload_device = mm.unet_offload_device()
@@ -273,7 +271,7 @@ class Hy3DPaintMesh:
 
         out_tensors = multiview_images.permute(0, 2, 3, 1).cpu().float()
         
-        return (out_tensors, )
+        return (out_tensors, self.render)
     
     def render_normal_multiview(self, camera_elevs, camera_azims, use_abs_coor=True):
         normal_maps = []
@@ -298,14 +296,8 @@ class Hy3DBakeFromMultiview:
     def INPUT_TYPES(s):
         return {
             "required": {
-                "pipeline": ("HY3DPAINTMODEL",),
-                "mesh": ("HY3DMESH",),
-                "image": ("IMAGE", ),
-                "view_size": ("INT", {"default": 512, "min": 64, "max": 4096, "step": 16}),
-                "render_size": ("INT", {"default": 2048, "min": 64, "max": 4096, "step": 16}),
-                "texture_size": ("INT", {"default": 2048, "min": 64, "max": 4096, "step": 16}),
-                "steps": ("INT", {"default": 30, "min": 1}),
-                "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
+                "images": ("IMAGE", ),
+                "renderer": ("MESHRENDER",),
             },
         }
 
@@ -314,31 +306,32 @@ class Hy3DBakeFromMultiview:
     FUNCTION = "process"
     CATEGORY = "Hunyuan3DWrapper"
 
-    def process(self, pipeline, image, mesh, view_size, render_size, texture_size, seed, steps):
+    def process(self, images, renderer):
         device = mm.get_torch_device()
-        np.random.seed(seed)
-        torch.manual_seed(seed)
-        generator=torch.Generator(device=pipeline.device).manual_seed(seed)
+        self.render = renderer
 
-        input_image = image.permute(0, 3, 1, 2).to(device)
+        multiviews = images.permute(0, 3, 1, 2).to(device)
 
         device = mm.get_torch_device()
-        for i in range(len(multiviews)):
-            multiviews[i] = multiviews[i].resize(
-                (self.config.render_size, self.config.render_size))
 
+        selected_camera_azims = [0, 90, 180, 270, 0, 180]
+        selected_camera_elevs = [0, 0, 0, 0, 90, -90]
+        selected_view_weights = [1, 0.1, 0.5, 0.1, 0.05, 0.05]
+        merge_method = 'fast'
+        
         texture, mask = self.bake_from_multiview(multiviews,
                                                  selected_camera_elevs, selected_camera_azims, selected_view_weights,
-                                                 method=self.config.merge_method)
-
+                                                 method=merge_method)
+        
         mask_np = (mask.squeeze(-1).cpu().numpy() * 255).astype(np.uint8)
 
-        texture = self.texture_inpaint(texture, mask_np)
+        texture_np = self.render.uv_inpaint(texture, mask_np)
+        texture = torch.tensor(texture_np / 255).float().to(texture.device)
 
         self.render.set_texture(texture)
         textured_mesh = self.render.save_mesh()
         
-        return (multiview_images, )
+        return (textured_mesh,)
     
     def bake_from_multiview(self, views, camera_elevs,
                             camera_azims, view_weights, method='graphcut'):
@@ -445,7 +438,8 @@ NODE_CLASS_MAPPINGS = {
     "DownloadAndLoadHy3DDelightModel": DownloadAndLoadHy3DDelightModel,
     "DownloadAndLoadHy3DPaintModel": DownloadAndLoadHy3DPaintModel,
     "Hy3DDelightImage": Hy3DDelightImage,
-    "Hy3DPaintMesh": Hy3DPaintMesh
+    "Hy3DRenderMultiView": Hy3DRenderMultiView,
+    "Hy3DBakeFromMultiview": Hy3DBakeFromMultiview
     }
 NODE_DISPLAY_NAME_MAPPINGS = {
     "Hy3DModelLoader": "Hy3DModelLoader",
@@ -454,5 +448,6 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "DownloadAndLoadHy3DDelightModel": "(Down)Load Hy3D DelightModel",
     "DownloadAndLoadHy3DPaintModel": "(Down)Load Hy3D PaintModel",
     "Hy3DDelightImage": "Hy3DDelightImage",
-    "Hy3DPaintMesh": "Hy3DPaintMesh"
+    "Hy3DRenderMultiView": "Hy3D Render MultiView",
+    "Hy3DBakeFromMultiview": "Hy3D Bake From Multiview"
     }
