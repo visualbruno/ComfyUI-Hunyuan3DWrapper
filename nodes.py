@@ -380,6 +380,9 @@ class Hy3DGenerateMesh:
 
         image = image.permute(0, 3, 1, 2).to(device)
 
+        if mask is not None:
+            mask = mask.unsqueeze(0).to(device)
+
         pipeline.to(device)
 
         mesh = pipeline(

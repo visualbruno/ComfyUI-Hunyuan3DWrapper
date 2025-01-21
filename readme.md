@@ -42,4 +42,4 @@ cd hy3dgen/texgen/differentiable_renderer
 python setup.py build_ext --inplace
 ```
 
-![alt text](image.png)
+![alt text](example_workflows/example_workflow.png)
