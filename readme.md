@@ -1,7 +1,7 @@
 # ComfyUI wrapper for [Hunyuan3D-2](https://github.com/Tencent/Hunyuan3D-2)
 
 # WORKINPROGRESS
-# installation still messy, requires compiling for texture gen
+# installation still messy, may require compiling for texture gen
 
 Main model, original: https://huggingface.co/tencent/Hunyuan3D-2/blob/main/hunyuan3d-dit-v2-0/model.ckpt
 
@@ -19,7 +19,7 @@ Dependencies, in your python env:
 or with portable:
 
 `python_embeded\python.exe -m pip install -r ComfyUI\custom_nodes\ComfyUI-Hunyuan3DWrapper\requirements.txt`
-```
+
 
 For the texturegen part compilation is needed, I have included my compilations as a wheel for the rasterizer, and compiled .pyd for the mesh_processor (already in place), these are compiled for:
 
