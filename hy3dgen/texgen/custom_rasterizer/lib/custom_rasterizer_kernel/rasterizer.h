@@ -5,8 +5,8 @@
 #include <vector>
 #include <ATen/ATen.h>
 #include <ATen/cuda/CUDAContext.h> // For CUDA context
-
-#define INT64 unsigned long long
+#include <cstdint>
+#define INT64 uint64_t
 #define MAXINT 2147483647
 
 __host__ __device__ inline float calculateSignedArea2(float* a, float* b, float* c) {
