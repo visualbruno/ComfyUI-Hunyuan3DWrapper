@@ -34,10 +34,11 @@ class Hy3DModelLoader:
 
     def loadmodel(self, model):
         device = mm.get_torch_device()
+        offload_device=mm.unet_offload_device()
 
         config_path = os.path.join(script_directory, "configs", "dit_config.yaml")
         model_path = folder_paths.get_full_path("diffusion_models", model)
-        pipe = Hunyuan3DDiTFlowMatchingPipeline.from_single_file(ckpt_path=model_path, config_path=config_path, use_safetensors=True, device=device)
+        pipe = Hunyuan3DDiTFlowMatchingPipeline.from_single_file(ckpt_path=model_path, config_path=config_path, use_safetensors=True, device=device, offload_device=offload_device)
         return (pipe,)
 
 class DownloadAndLoadHy3DDelightModel:
@@ -361,6 +362,7 @@ class Hy3DGenerateMesh:
                 "remove_floaters": ("BOOLEAN", {"default": True}),
                 "remove_degenerate_faces": ("BOOLEAN", {"default": True}),
                 "reduce_faces": ("BOOLEAN", {"default": True}),
+                "max_facenum": ("INT", {"default": 40000, "min": 1}),
             },
             "optional": {
                 "mask": ("MASK", ),
@@ -372,7 +374,7 @@ class Hy3DGenerateMesh:
     FUNCTION = "process"
     CATEGORY = "Hunyuan3DWrapper"
 
-    def process(self, pipeline, image, steps, guidance_scale, octree_resolution, seed, remove_floaters, remove_degenerate_faces, reduce_faces, 
+    def process(self, pipeline, image, steps, guidance_scale, octree_resolution, seed, remove_floaters, remove_degenerate_faces, reduce_faces, max_facenum,
                 mask=None):
 
         device = mm.get_torch_device()
@@ -394,12 +396,17 @@ class Hy3DGenerateMesh:
             octree_resolution=octree_resolution,
             generator=torch.manual_seed(seed))[0]
         
+        log.info(f"Generated mesh with {mesh.vertices.shape[0]} vertices and {mesh.faces.shape[0]} faces")
+        
         if remove_floaters:
             mesh = FloaterRemover()(mesh)
+            log.info(f"Removed floaters, resulting in {mesh.vertices.shape[0]} vertices and {mesh.faces.shape[0]} faces")
         if remove_degenerate_faces:
             mesh = DegenerateFaceRemover()(mesh)
+            log.info(f"Removed degenerate faces, resulting in {mesh.vertices.shape[0]} vertices and {mesh.faces.shape[0]} faces")
         if reduce_faces:
-            mesh = FaceReducer()(mesh)
+            mesh = FaceReducer()(mesh, max_facenum=max_facenum)
+            log.info(f"Reduced faces, resulting in {mesh.vertices.shape[0]} vertices and {mesh.faces.shape[0]} faces")
 
         pipeline.to(offload_device)
         
