@@ -425,8 +425,10 @@ class Hy3DExportMesh:
         output_glb_path = Path(full_output_folder, f'{filename}_{counter:05}_.glb')
         output_glb_path.parent.mkdir(exist_ok=True)
         mesh.export(output_glb_path)
+
+        relative_path = Path(subfolder) / f'{filename}_{counter:05}_.glb'
         
-        return (str(output_glb_path), )
+        return (str(relative_path), )
 
 NODE_CLASS_MAPPINGS = {
     "Hy3DModelLoader": Hy3DModelLoader,
