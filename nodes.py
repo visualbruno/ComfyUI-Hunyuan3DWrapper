@@ -461,9 +461,6 @@ class Hy3DPostprocessMesh:
                 "reduce_faces": ("BOOLEAN", {"default": True}),
                 "max_facenum": ("INT", {"default": 40000, "min": 1}),
             },
-            "optional": {
-                "mask": ("MASK", ),
-            }
         }
 
     RETURN_TYPES = ("HY3DMESH",)
