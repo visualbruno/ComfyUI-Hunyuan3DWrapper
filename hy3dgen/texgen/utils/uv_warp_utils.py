@@ -31,8 +31,8 @@ def mesh_uv_wrap(mesh):
         mesh = mesh.dump(concatenate=True)
 
     if len(mesh.faces) > 50000:
-        raise ValueError("The mesh has more than 50,000 faces, which is not supported.")
-
+        #raise ValueError("The mesh has more than 50,000 faces, which is not supported.")
+        print("UV wrap: The mesh has more than 50,000 faces, which is not recommended.")
     vmapping, indices, uvs = xatlas.parametrize(mesh.vertices, mesh.faces)
 
     mesh.vertices = mesh.vertices[vmapping]

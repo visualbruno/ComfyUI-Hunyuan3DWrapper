@@ -475,7 +475,7 @@ class Hy3DPostprocessMesh:
                 "remove_floaters": ("BOOLEAN", {"default": True}),
                 "remove_degenerate_faces": ("BOOLEAN", {"default": True}),
                 "reduce_faces": ("BOOLEAN", {"default": True}),
-                "max_facenum": ("INT", {"default": 40000, "min": 1}),
+                "max_facenum": ("INT", {"default": 40000, "min": 1, "max": 10000000, "step": 1}),
             },
         }
 
