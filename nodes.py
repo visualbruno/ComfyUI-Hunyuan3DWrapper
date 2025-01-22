@@ -9,11 +9,23 @@ from .hy3dgen.shapegen import Hunyuan3DDiTFlowMatchingPipeline, FaceReducer, Flo
 import folder_paths
 
 import comfy.model_management as mm
-from comfy.utils import load_torch_file
+from comfy.utils import load_torch_file, ProgressBar
 
 script_directory = os.path.dirname(os.path.abspath(__file__))
 
 from .utils import log, print_memory
+
+class ComfyProgressCallback:
+    def __init__(self, total_steps):
+        self.pbar = ProgressBar(total_steps)
+        
+    def __call__(self, pipe, i, t, callback_kwargs):
+        self.pbar.update(1)
+        return {
+            "latents": callback_kwargs["latents"],
+            "prompt_embeds": callback_kwargs["prompt_embeds"],
+            "negative_prompt_embeds": callback_kwargs["negative_prompt_embeds"]
+        }
 
 class Hy3DTorchCompileSettings:
     @classmethod
@@ -92,7 +104,7 @@ class DownloadAndLoadHy3DDelightModel:
         }
 
     RETURN_TYPES = ("DELIGHTMODEL",)
-    RETURN_NAMES = ("delight_model", )
+    RETURN_NAMES = ("delight_pipe", )
     FUNCTION = "loadmodel"
     CATEGORY = "Hunyuan3DWrapper"
 
@@ -154,8 +166,6 @@ class Hy3DDelightImage:
 
         image = image.permute(0, 3, 1, 2).to(device)
 
-        #delight_pipe = delight_pipe.to(device)
-
         image = delight_pipe(
             prompt="",
             image=image,
@@ -165,10 +175,9 @@ class Hy3DDelightImage:
             num_inference_steps=steps,
             image_guidance_scale=cfg_image,
             guidance_scale=cfg_text,
-            output_type="pt"
+            output_type="pt",
+            
         ).images[0]
-
-        #delight_pipe = delight_pipe.to(offload_device)
 
         out_tensor = image.unsqueeze(0).permute(0, 2, 3, 1).cpu().float()
         
@@ -184,7 +193,7 @@ class DownloadAndLoadHy3DPaintModel:
         }
 
     RETURN_TYPES = ("HY3DPAINTMODEL",)
-    RETURN_NAMES = ("multiview_model", )
+    RETURN_NAMES = ("multiview_pipe", )
     FUNCTION = "loadmodel"
     CATEGORY = "Hunyuan3DWrapper"
 
@@ -287,6 +296,8 @@ class Hy3DRenderMultiView:
 
         #pipeline = pipeline.to(device)
 
+        callback = ComfyProgressCallback(total_steps=steps)
+
         multiview_images = pipeline(
             input_image,
             width=view_size,
@@ -299,6 +310,9 @@ class Hy3DRenderMultiView:
             position_imgs = position_image,
             num_inference_steps=steps,
             output_type="pt",
+            callback_on_step_end=callback,
+            callback_on_step_end_tensor_inputs=["latents", "prompt_embeds", "negative_prompt_embeds"]
+
             ).images
         
         #pipeline = pipeline.to(offload_device)
@@ -373,6 +387,7 @@ class Hy3DBakeFromMultiview:
                             camera_azims, view_weights, method='graphcut'):
         project_textures, project_weighted_cos_maps = [], []
         project_boundary_maps = []
+        pbar = ProgressBar(len(views))
         for view, camera_elev, camera_azim, weight in zip(
             views, camera_elevs, camera_azims, view_weights):
             project_texture, project_cos_map, project_boundary_map = self.render.back_project(
@@ -381,6 +396,7 @@ class Hy3DBakeFromMultiview:
             project_textures.append(project_texture)
             project_weighted_cos_maps.append(project_cos_map)
             project_boundary_maps.append(project_boundary_map)
+            pbar.update(1)
 
         if method == 'fast':
             texture, ori_trust_map = self.render.fast_bake_texture(

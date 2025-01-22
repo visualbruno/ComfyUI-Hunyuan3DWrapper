@@ -1,6 +1,6 @@
 {
   "last_node_id": 60,
-  "last_link_id": 90,
+  "last_link_id": 91,
   "nodes": [
     {
       "id": 13,
@@ -277,7 +277,7 @@
       "inputs": [],
       "outputs": [
         {
-          "name": "delight_model",
+          "name": "delight_pipe",
           "type": "DELIGHTMODEL",
           "links": [
             30
@@ -386,7 +386,7 @@
       "inputs": [],
       "outputs": [
         {
-          "name": "multiview_model",
+          "name": "multiview_pipe",
           "type": "HY3DPAINTMODEL",
           "links": [
             40
@@ -399,60 +399,6 @@
       },
       "widgets_values": [
         "hunyuan3d-paint-v2-0"
-      ]
-    },
-    {
-      "id": 52,
-      "type": "ImageResize+",
-      "pos": [
-        -668.4475708007812,
-        -291.98388671875
-      ],
-      "size": [
-        315,
-        218
-      ],
-      "flags": {},
-      "order": 6,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "image",
-          "type": "IMAGE",
-          "link": 69
-        }
-      ],
-      "outputs": [
-        {
-          "name": "IMAGE",
-          "type": "IMAGE",
-          "links": [
-            75,
-            83
-          ],
-          "slot_index": 0
-        },
-        {
-          "name": "width",
-          "type": "INT",
-          "links": null
-        },
-        {
-          "name": "height",
-          "type": "INT",
-          "links": null
-        }
-      ],
-      "properties": {
-        "Node name for S&R": "ImageResize+"
-      },
-      "widgets_values": [
-        512,
-        512,
-        "lanczos",
-        "pad",
-        "always",
-        0
       ]
     },
     {
@@ -774,9 +720,7 @@
         {
           "name": "IMAGE",
           "type": "IMAGE",
-          "links": [
-            78
-          ],
+          "links": [],
           "slot_index": 0
         },
         {
@@ -852,7 +796,7 @@
         {
           "name": "source",
           "type": "IMAGE",
-          "link": 78
+          "link": 91
         },
         {
           "name": "mask",
@@ -947,6 +891,61 @@
         "original",
         75,
         null
+      ]
+    },
+    {
+      "id": 52,
+      "type": "ImageResize+",
+      "pos": [
+        -668.4475708007812,
+        -291.98388671875
+      ],
+      "size": [
+        315,
+        218
+      ],
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 69
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            75,
+            83,
+            91
+          ],
+          "slot_index": 0
+        },
+        {
+          "name": "width",
+          "type": "INT",
+          "links": null
+        },
+        {
+          "name": "height",
+          "type": "INT",
+          "links": null
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "ImageResize+"
+      },
+      "widgets_values": [
+        512,
+        512,
+        "lanczos",
+        "pad",
+        "always",
+        0
       ]
     }
   ],
@@ -1072,14 +1071,6 @@
       "IMAGE"
     ],
     [
-      78,
-      56,
-      0,
-      57,
-      1,
-      "IMAGE"
-    ],
-    [
       79,
       56,
       1,
@@ -1158,6 +1149,14 @@
       42,
       0,
       "IMAGE"
+    ],
+    [
+      91,
+      52,
+      0,
+      57,
+      1,
+      "IMAGE"
     ]
   ],
   "groups": [
@@ -1204,16 +1203,16 @@
   "config": {},
   "extra": {
     "ds": {
-      "scale": 0.5054470284993025,
+      "scale": 0.5559917313492327,
       "offset": [
-        1409.3260143727844,
-        532.4019697620178
+        1771.1866402657352,
+        777.3248184126946
       ]
     },
     "node_versions": {
       "comfy-core": "0.3.12",
-      "ComfyUI-Hunyuan3DWrapper": "75ad5e41eb32f771e7a88dd9db50a004c98b3832",
-      "ComfyUI_essentials": "60acb955712ae84959873012a8d9bbfc230499b7"
+      "ComfyUI-Hunyuan3DWrapper": "1ec09149678bc9064c22c5f71d05a8526b6063b8",
+      "ComfyUI_essentials": "76e9d1e4399bd025ce8b12c290753d58f9f53e93"
     },
     "VHS_latentpreview": true,
     "VHS_latentpreviewrate": 0
