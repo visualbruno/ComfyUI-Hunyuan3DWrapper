@@ -152,6 +152,7 @@ class Hunyuan3DDiTPipeline:
         offload_device=torch.device('cpu'),
         dtype=torch.float16,
         use_safetensors=None,
+        compile_args=None,
         **kwargs,
     ):
         # load config
@@ -199,6 +200,13 @@ class Hunyuan3DDiTPipeline:
 
         image_processor = instantiate_from_config(config['image_processor'])
         scheduler = instantiate_from_config(config['scheduler'])
+
+        if compile_args is not None:
+            torch._dynamo.config.cache_size_limit = compile_args["dynamo_cache_size_limit"]
+            if compile_args["compile_transformer"]:
+                model = torch.compile(model)
+            if compile_args["compile_vae"]:
+                vae = torch.compile(vae)
 
         model_kwargs = dict(
             vae=vae,
