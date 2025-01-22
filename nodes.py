@@ -381,6 +381,7 @@ class Hy3DGenerateMesh:
         offload_device = mm.unet_offload_device()
 
         image = image.permute(0, 3, 1, 2).to(device)
+        image = image * 2 - 1
 
         if mask is not None:
             mask = mask.unsqueeze(0).to(device)
