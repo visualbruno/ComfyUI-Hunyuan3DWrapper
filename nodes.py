@@ -63,7 +63,7 @@ class Hy3DModelLoader:
         }
 
     RETURN_TYPES = ("HY3DMODEL",)
-    RETURN_NAMES = ("model", )
+    RETURN_NAMES = ("pipeline", )
     FUNCTION = "loadmodel"
     CATEGORY = "Hunyuan3DWrapper"
 
@@ -400,10 +400,6 @@ class Hy3DGenerateMesh:
                 "guidance_scale": ("FLOAT", {"default": 5.5, "min": 0.0, "max": 100.0, "step": 0.01}),
                 "steps": ("INT", {"default": 30, "min": 1}),
                 "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
-                "remove_floaters": ("BOOLEAN", {"default": True}),
-                "remove_degenerate_faces": ("BOOLEAN", {"default": True}),
-                "reduce_faces": ("BOOLEAN", {"default": True}),
-                "max_facenum": ("INT", {"default": 40000, "min": 1}),
             },
             "optional": {
                 "mask": ("MASK", ),
@@ -415,8 +411,7 @@ class Hy3DGenerateMesh:
     FUNCTION = "process"
     CATEGORY = "Hunyuan3DWrapper"
 
-    def process(self, pipeline, image, steps, guidance_scale, octree_resolution, seed, remove_floaters, remove_degenerate_faces, reduce_faces, max_facenum,
-                mask=None):
+    def process(self, pipeline, image, steps, guidance_scale, octree_resolution, seed, mask=None):
 
         device = mm.get_torch_device()
         offload_device = mm.unet_offload_device()
@@ -444,7 +439,39 @@ class Hy3DGenerateMesh:
             generator=torch.manual_seed(seed))[0]
         
         log.info(f"Generated mesh with {mesh.vertices.shape[0]} vertices and {mesh.faces.shape[0]} faces")
+
+        print_memory(device)
+        try:
+            torch.cuda.reset_peak_memory_stats(device)
+        except:
+            pass
+
+        pipeline.to(offload_device)
         
+        return (mesh, )
+    
+class Hy3DPostprocessMesh:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "mesh": ("HY3DMESH",),
+                "remove_floaters": ("BOOLEAN", {"default": True}),
+                "remove_degenerate_faces": ("BOOLEAN", {"default": True}),
+                "reduce_faces": ("BOOLEAN", {"default": True}),
+                "max_facenum": ("INT", {"default": 40000, "min": 1}),
+            },
+            "optional": {
+                "mask": ("MASK", ),
+            }
+        }
+
+    RETURN_TYPES = ("HY3DMESH",)
+    RETURN_NAMES = ("mesh",)
+    FUNCTION = "process"
+    CATEGORY = "Hunyuan3DWrapper"
+
+    def process(self, mesh, remove_floaters, remove_degenerate_faces, reduce_faces, max_facenum):
         if remove_floaters:
             mesh = FloaterRemover()(mesh)
             log.info(f"Removed floaters, resulting in {mesh.vertices.shape[0]} vertices and {mesh.faces.shape[0]} faces")
@@ -454,14 +481,6 @@ class Hy3DGenerateMesh:
         if reduce_faces:
             mesh = FaceReducer()(mesh, max_facenum=max_facenum)
             log.info(f"Reduced faces, resulting in {mesh.vertices.shape[0]} vertices and {mesh.faces.shape[0]} faces")
-
-        print_memory(device)
-        try:
-            torch.cuda.reset_peak_memory_stats(device)
-        except:
-            pass
-
-        pipeline.to(offload_device)
         
         return (mesh, )
     
@@ -499,7 +518,8 @@ NODE_CLASS_MAPPINGS = {
     "Hy3DDelightImage": Hy3DDelightImage,
     "Hy3DRenderMultiView": Hy3DRenderMultiView,
     "Hy3DBakeFromMultiview": Hy3DBakeFromMultiview,
-    "Hy3DTorchCompileSettings": Hy3DTorchCompileSettings
+    "Hy3DTorchCompileSettings": Hy3DTorchCompileSettings,
+    "Hy3DPostprocessMesh": Hy3DPostprocessMesh
     }
 NODE_DISPLAY_NAME_MAPPINGS = {
     "Hy3DModelLoader": "Hy3DModelLoader",
@@ -510,5 +530,6 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "Hy3DDelightImage": "Hy3DDelightImage",
     "Hy3DRenderMultiView": "Hy3D Render MultiView",
     "Hy3DBakeFromMultiview": "Hy3D Bake From Multiview",
-    "Hy3DTorchCompileSettings": "Hy3D Torch Compile Settings"
+    "Hy3DTorchCompileSettings": "Hy3D Torch Compile Settings",
+    "Hy3DPostprocessMesh": "Hy3D Postprocess Mesh"
     }
