@@ -13,9 +13,7 @@ from comfy.utils import load_torch_file
 
 script_directory = os.path.dirname(os.path.abspath(__file__))
 
-import logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-log = logging.getLogger(__name__)
+from .utils import log, print_memory
 
 #region Model loading
 class Hy3DModelLoader:
@@ -388,6 +386,11 @@ class Hy3DGenerateMesh:
 
         pipeline.to(device)
 
+        try:
+            torch.cuda.reset_peak_memory_stats(device)
+        except:
+            pass
+
         mesh = pipeline(
             image=image, 
             mask=mask,
@@ -408,6 +411,12 @@ class Hy3DGenerateMesh:
         if reduce_faces:
             mesh = FaceReducer()(mesh, max_facenum=max_facenum)
             log.info(f"Reduced faces, resulting in {mesh.vertices.shape[0]} vertices and {mesh.faces.shape[0]} faces")
+
+        print_memory(device)
+        try:
+            torch.cuda.reset_peak_memory_stats(device)
+        except:
+            pass
 
         pipeline.to(offload_device)
         

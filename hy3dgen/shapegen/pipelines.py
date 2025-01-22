@@ -37,6 +37,9 @@ from PIL import Image
 from diffusers.utils.torch_utils import randn_tensor
 from tqdm import tqdm
 
+from accelerate import init_empty_weights
+from accelerate.utils import set_module_tensor_to_device
+
 from comfy.utils import ProgressBar
 import comfy.model_management as mm
 
@@ -176,13 +179,24 @@ class Hunyuan3DDiTPipeline:
         else:
             ckpt = torch.load(ckpt_path, map_location='cpu')
         # load model
-        model = instantiate_from_config(config['model'])
-        model.load_state_dict(ckpt['model'])
-        vae = instantiate_from_config(config['vae'])
-        vae.load_state_dict(ckpt['vae'])
-        conditioner = instantiate_from_config(config['conditioner'])
+        with init_empty_weights():
+            model = instantiate_from_config(config['model'])
+            vae = instantiate_from_config(config['vae'])
+            conditioner = instantiate_from_config(config['conditioner'])
+        #model
+        #model.load_state_dict(ckpt['model'])
+        for name, param in model.named_parameters():
+            set_module_tensor_to_device(model, name, device=offload_device, dtype=dtype, value=ckpt['model'][name])
+        #vae
+        #vae.load_state_dict(ckpt['vae'])
+        for name, param in vae.named_parameters():
+            set_module_tensor_to_device(vae, name, device=offload_device, dtype=dtype, value=ckpt['vae'][name])       
+        
         if 'conditioner' in ckpt:
-            conditioner.load_state_dict(ckpt['conditioner'])
+            #conditioner.load_state_dict(ckpt['conditioner'])
+            for name, param in conditioner.named_parameters():
+                set_module_tensor_to_device(conditioner, name, device=offload_device, dtype=dtype, value=ckpt['conditioner'][name])
+
         image_processor = instantiate_from_config(config['image_processor'])
         scheduler = instantiate_from_config(config['scheduler'])
 
