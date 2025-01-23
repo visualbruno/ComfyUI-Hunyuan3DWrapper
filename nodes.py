@@ -453,9 +453,10 @@ class Hy3DSampleMultiView:
             selected_camera_azims = camera_config["selected_camera_azims"]
             selected_camera_elevs = camera_config["selected_camera_elevs"]
         
-        camera_info = [(((azim // 30) + 9) % 12) // {-20: 1, 0: 1, 20: 1, -90: 3, 90: 3}[
-            elev] + {-20: 0, 0: 12, 20: 24, -90: 36, 90: 40}[elev] for azim, elev in
-                       zip(selected_camera_azims, selected_camera_elevs)]
+        camera_info = [(((azim // 30) + 9) % 12) // {-90: 3, -45: 2, -20: 1, 0: 1, 20: 1, 45: 2, 90: 3}[
+            elev] + {-90: 36, -45: 30, -20: 0, 0: 12, 20: 24, 45: 30, 90: 40}[elev] for azim, elev in
+                    zip(selected_camera_azims, selected_camera_elevs)]
+        print(camera_info)
         
         normal_maps_np = (normal_maps * 255).to(torch.uint8).cpu().numpy()
         normal_maps_pil = [Image.fromarray(normal_map) for normal_map in normal_maps_np]
@@ -504,6 +505,9 @@ class Hy3DBakeFromMultiview:
                 "images": ("IMAGE", ),
                 "renderer": ("MESHRENDER",),
             },
+            "optional": {
+                "camera_config": ("HY3DCAMERA",),
+            }
         }
 
     RETURN_TYPES = ("IMAGE", "MASK", "MESHRENDER") 
