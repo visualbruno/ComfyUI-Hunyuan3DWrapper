@@ -1,6 +1,6 @@
 # ComfyUI wrapper for [Hunyuan3D-2](https://github.com/Tencent/Hunyuan3D-2)
 
-# WORKINPROGRESS
+# WORK IN PROGRESS
 # installation still messy, may require compiling for texture gen
 
 Main model, original: https://huggingface.co/tencent/Hunyuan3D-2/blob/main/hunyuan3d-dit-v2-0/model.ckpt
@@ -9,7 +9,7 @@ Converted to .safetensors: https://huggingface.co/Kijai/Hunyuan3D-2_safetensors
 
 to `ComfyUI/models/diffusion_models/`
 
-Rest of the models are diffusers models, so they are wrapped and autodownloaded for now.
+Rest of the models are diffusers models, so they are wrapped and autodownloaded for now. Very new version of ComyUI is also required for the Preview3D -node.
 
 # Installation
 Dependencies, in your python env:
@@ -41,11 +41,10 @@ cd hy3dgen/texgen/custom_rasterizer
 python setup.py install
 ```
 
-or build with `python setup.py bdist_wheel` which creates the .whl file to the dist -subfolder, which you then would pip install to your python environment. 
+Or build with `python setup.py bdist_wheel` which creates the .whl file to the dist -subfolder, which you then would pip install to your python environment. 
 End result needs to be `custom_rasterizer_kernel*.pyd` file and `custom_rasterizer` folder in your python environments `site-packages` folder.
-```
 
-for the mesh_processor extension the build command would be this:
+For the mesh_processor extension the build command would be this:
 ```
 cd hy3dgen/texgen/differentiable_renderer
 python setup.py build_ext --inplace
