@@ -383,10 +383,10 @@ class Hy3DSampleMultiView:
             elev] + {-20: 0, 0: 12, 20: 24, -90: 36, 90: 40}[elev] for azim, elev in
                        zip(selected_camera_azims, selected_camera_elevs)]
         
-        normal_maps_np = (normal_maps * 255).clamp(0, 255).to(torch.uint8).cpu().numpy()
+        normal_maps_np = (normal_maps * 255).to(torch.uint8).cpu().numpy()
         normal_maps_pil = [Image.fromarray(normal_map) for normal_map in normal_maps_np]
 
-        position_maps_np = (position_maps * 255).clamp(0, 255).to(torch.uint8).cpu().numpy()
+        position_maps_np = (position_maps * 255).to(torch.uint8).cpu().numpy()
         position_maps_pil = [Image.fromarray(position_map) for position_map in position_maps_np]
         
         control_images = normal_maps_pil + position_maps_pil
