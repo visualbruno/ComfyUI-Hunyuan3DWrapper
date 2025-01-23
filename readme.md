@@ -7,7 +7,7 @@ Main model, original: https://huggingface.co/tencent/Hunyuan3D-2/blob/main/hunyu
 
 Converted to .safetensors: https://huggingface.co/Kijai/Hunyuan3D-2_safetensors
 
-to `ComfyUI/diffusion_models/`
+to `ComfyUI/models/diffusion_models/`
 
 Rest of the models are diffusers models, so they are wrapped and autodownloaded for now.
 
@@ -32,14 +32,26 @@ or with portable (in `ComfyUI_windows_portable` -folder):
 
 This was tested to work on latest ComfyUI portable install
 
-For anything else you need to compile yourself:
+If this doesn't work, you need to compile yourself:
+
+Rasterizer, to build and install:
 
 ```
 cd hy3dgen/texgen/custom_rasterizer
 python setup.py install
+```
 
+or build with `python setup.py bdist_wheel` which creates the .whl file to the dist -subfolder, which you then would pip install to your python environment. 
+End result needs to be `custom_rasterizer_kernel*.pyd` file and `custom_rasterizer` folder in your python environments `site-packages` folder.
+```
+
+for the mesh_processor extension the build command would be this:
+```
 cd hy3dgen/texgen/differentiable_renderer
 python setup.py build_ext --inplace
 ```
+This file is supposed to be in that very folder. It is only used for the vertex inpainting, if this file doesn't exist the fallback is ran on cpu and is much slower. The vertex inpainting is on it's own node and in the worst case can just be bypassed, downside would be worse filling of the textures.
+
+Again, with portable you should use the embedded python to run the commands.
 
 ![alt text](example_workflows/example_workflow.png)
