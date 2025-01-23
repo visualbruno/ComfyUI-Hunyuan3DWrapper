@@ -1,6 +1,7 @@
 import importlib.metadata
 import torch
 import logging
+import numpy as np
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 log = logging.getLogger(__name__)
 
@@ -22,3 +23,14 @@ def print_memory(device):
     log.info(f"Max reserved memory: {max_reserved=:.3f} GB")
     #memory_summary = torch.cuda.memory_summary(device=device, abbreviated=False)
     #log.info(f"Memory Summary:\n{memory_summary}")
+
+def pil_list_to_torch_batch(normal_maps):
+    # Convert PIL images to numpy arrays and stack
+    arrays = [np.array(img) for img in normal_maps]
+    batch = np.stack(arrays, axis=0)
+    
+    # Convert to torch tensor, ensure float32
+    tensor = torch.from_numpy(batch).float() / 255.0
+    
+    # Tensor is now in B,H,W,C format
+    return tensor

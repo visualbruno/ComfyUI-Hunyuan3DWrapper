@@ -13,7 +13,7 @@ from comfy.utils import load_torch_file, ProgressBar
 
 script_directory = os.path.dirname(os.path.abspath(__file__))
 
-from .utils import log, print_memory
+from .utils import log, print_memory, pil_list_to_torch_batch
 
 class ComfyProgressCallback:
     def __init__(self, total_steps):
@@ -226,32 +226,75 @@ class DownloadAndLoadHy3DPaintModel:
         pipeline.enable_model_cpu_offload()
         return (pipeline,)
 
+class Hy3DCameraConfig:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "camera_azimuths": ("STRING", {"default": "0, 90, 180, 270, 0, 180", "multiline": False}),
+                "camera_elevations": ("STRING", {"default": "0, 0, 0, 0, 90, -90", "multiline": False}),
+                "view_weights": ("STRING", {"default": "1, 0.1, 0.5, 0.1, 0.05, 0.05", "multiline": False}),
+            },
+        }
+
+    RETURN_TYPES = ("HY3DCAMERA",)
+    RETURN_NAMES = ("camera_config",)
+    FUNCTION = "process"
+    CATEGORY = "Hunyuan3DWrapper"
+
+    def process(self, camera_azimuths, camera_elevations, view_weights):
+        angles_list = list(map(int, camera_azimuths.replace(" ", "").split(',')))
+        elevations_list = list(map(int, camera_elevations.replace(" ", "").split(',')))
+        weights_list = list(map(float, view_weights.replace(" ", "").split(',')))
+
+        camera_config = {
+            "selected_camera_azims": angles_list,
+            "selected_camera_elevs": elevations_list,
+            "selected_view_weights": weights_list
+            }
+        
+        return (camera_config,)
+    
+class Hy3DMeshUVWrap:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "mesh": ("HY3DMESH",),
+            },
+        }
+
+    RETURN_TYPES = ("HY3DMESH", )
+    RETURN_NAMES = ("mesh", )
+    FUNCTION = "process"
+    CATEGORY = "Hunyuan3DWrapper"
+
+    def process(self, mesh):
+        from .hy3dgen.texgen.utils.uv_warp_utils import mesh_uv_wrap
+        mesh = mesh_uv_wrap(mesh)
+        
+        return (mesh,)
+
 class Hy3DRenderMultiView:
     @classmethod
     def INPUT_TYPES(s):
         return {
             "required": {
-                "pipeline": ("HY3DPAINTMODEL",),
                 "mesh": ("HY3DMESH",),
-                "image": ("IMAGE", ),
-                "view_size": ("INT", {"default": 512, "min": 64, "max": 4096, "step": 16}),
                 "render_size": ("INT", {"default": 1024, "min": 64, "max": 4096, "step": 16}),
                 "texture_size": ("INT", {"default": 1024, "min": 64, "max": 4096, "step": 16}),
-                "steps": ("INT", {"default": 30, "min": 1}),
-                "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
             },
+            "optional": {
+                "camera_config": ("HY3DCAMERA",),
+            }
         }
 
-    RETURN_TYPES = ("IMAGE", "MESHRENDER")
-    RETURN_NAMES = ("image", "renderer")
+    RETURN_TYPES = ("IMAGE", "IMAGE", "MESHRENDER")
+    RETURN_NAMES = ("normal_maps", "position_maps", "renderer")
     FUNCTION = "process"
     CATEGORY = "Hunyuan3DWrapper"
 
-    def process(self, pipeline, image, mesh, view_size, render_size, texture_size, seed, steps):
-        device = mm.get_torch_device()
-        mm.soft_empty_cache()
-        torch.manual_seed(seed)
-        generator=torch.Generator(device=pipeline.device).manual_seed(seed)
+    def process(self, mesh, render_size, texture_size, camera_config=None):
 
         from .hy3dgen.texgen.differentiable_renderer.mesh_render import MeshRender
 
@@ -259,31 +302,94 @@ class Hy3DRenderMultiView:
             default_resolution=render_size,
             texture_size=texture_size)
 
-        input_image = image.permute(0, 3, 1, 2).unsqueeze(0).to(device)
-
-        device = mm.get_torch_device()
-        offload_device = mm.unet_offload_device()
-
-        from .hy3dgen.texgen.utils.uv_warp_utils import mesh_uv_wrap
-
-        mesh = mesh_uv_wrap(mesh)
-
         self.render.load_mesh(mesh)
 
-        selected_camera_azims = [0, 90, 180, 270, 0, 180]
-        selected_camera_elevs = [0, 0, 0, 0, 90, -90]
-        selected_view_weights = [1, 0.1, 0.5, 0.1, 0.05, 0.05]
+        if camera_config is None:
+            selected_camera_azims = [0, 90, 180, 270, 0, 180]
+            selected_camera_elevs = [0, 0, 0, 0, 90, -90]
+        else:
+            selected_camera_azims = camera_config["selected_camera_azims"]
+            selected_camera_elevs = camera_config["selected_camera_elevs"]
 
         normal_maps = self.render_normal_multiview(
             selected_camera_elevs, selected_camera_azims, use_abs_coor=True)
+        normal_tensors = torch.stack(normal_maps, dim=0)
+        
         position_maps = self.render_position_multiview(
             selected_camera_elevs, selected_camera_azims)
+        position_tensors = torch.stack(position_maps, dim=0)
+        
+        return (normal_tensors, position_tensors, self.render,)
+    
+    def render_normal_multiview(self, camera_elevs, camera_azims, use_abs_coor=True):
+        normal_maps = []
+        for elev, azim in zip(camera_elevs, camera_azims):
+            normal_map = self.render.render_normal(
+                elev, azim, use_abs_coor=use_abs_coor, return_type='th')
+            normal_maps.append(normal_map)
+
+        return normal_maps
+
+    def render_position_multiview(self, camera_elevs, camera_azims):
+        position_maps = []
+        for elev, azim in zip(camera_elevs, camera_azims):
+            position_map = self.render.render_position(
+                elev, azim, return_type='th')
+            position_maps.append(position_map)
+
+        return position_maps
+    
+class Hy3DSampleMultiView:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "pipeline": ("HY3DPAINTMODEL",),
+                "ref_image": ("IMAGE", ),
+                "normal_maps": ("IMAGE", ),
+                "position_maps": ("IMAGE", ),
+                "view_size": ("INT", {"default": 512, "min": 64, "max": 4096, "step": 16}),
+                "steps": ("INT", {"default": 30, "min": 1}),
+                "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
+            },
+            "optional": {
+                "camera_config": ("HY3DCAMERA",),
+            }
+        }
+
+    RETURN_TYPES = ("IMAGE",)
+    RETURN_NAMES = ("image",)
+    FUNCTION = "process"
+    CATEGORY = "Hunyuan3DWrapper"
+
+    def process(self, pipeline, ref_image, normal_maps, position_maps, view_size, seed, steps, camera_config=None):
+        device = mm.get_torch_device()
+        mm.soft_empty_cache()
+        torch.manual_seed(seed)
+        generator=torch.Generator(device=pipeline.device).manual_seed(seed)
+
+        input_image = ref_image.permute(0, 3, 1, 2).unsqueeze(0).to(device)
+
+        device = mm.get_torch_device()
+
+        if camera_config is None:
+            selected_camera_azims = [0, 90, 180, 270, 0, 180]
+            selected_camera_elevs = [0, 0, 0, 0, 90, -90]
+        else:
+            selected_camera_azims = camera_config["selected_camera_azims"]
+            selected_camera_elevs = camera_config["selected_camera_elevs"]
         
         camera_info = [(((azim // 30) + 9) % 12) // {-20: 1, 0: 1, 20: 1, -90: 3, 90: 3}[
             elev] + {-20: 0, 0: 12, 20: 24, -90: 36, 90: 40}[elev] for azim, elev in
                        zip(selected_camera_azims, selected_camera_elevs)]
         
-        control_images = normal_maps + position_maps
+        normal_maps_np = (normal_maps * 255).clamp(0, 255).to(torch.uint8).cpu().numpy()
+        normal_maps_pil = [Image.fromarray(normal_map) for normal_map in normal_maps_np]
+
+        position_maps_np = (position_maps * 255).clamp(0, 255).to(torch.uint8).cpu().numpy()
+        position_maps_pil = [Image.fromarray(position_map) for position_map in position_maps_np]
+        
+        control_images = normal_maps_pil + position_maps_pil
 
         for i in range(len(control_images)):
             control_images[i] = control_images[i].resize((view_size, view_size))
@@ -293,8 +399,6 @@ class Hy3DRenderMultiView:
         num_view = len(control_images) // 2
         normal_image = [[control_images[i] for i in range(num_view)]]
         position_image = [[control_images[i + num_view] for i in range(num_view)]]
-
-        #pipeline = pipeline.to(device)
 
         callback = ComfyProgressCallback(total_steps=steps)
 
@@ -312,14 +416,11 @@ class Hy3DRenderMultiView:
             output_type="pt",
             callback_on_step_end=callback,
             callback_on_step_end_tensor_inputs=["latents", "prompt_embeds", "negative_prompt_embeds"]
-
             ).images
-        
-        #pipeline = pipeline.to(offload_device)
 
         out_tensors = multiview_images.permute(0, 2, 3, 1).cpu().float()
         
-        return (out_tensors, self.render)
+        return (out_tensors,)
     
     def render_normal_multiview(self, camera_elevs, camera_azims, use_abs_coor=True):
         normal_maps = []
@@ -349,12 +450,12 @@ class Hy3DBakeFromMultiview:
             },
         }
 
-    RETURN_TYPES = ("HY3DMESH", "IMAGE", )
-    RETURN_NAMES = ("mesh", "texture",)
+    RETURN_TYPES = ("IMAGE", "MASK", "MESHRENDER") 
+    RETURN_NAMES = ("texture", "mask", "renderer")
     FUNCTION = "process"
     CATEGORY = "Hunyuan3DWrapper"
 
-    def process(self, images, renderer):
+    def process(self, images, renderer, camera_config=None):
         device = mm.get_torch_device()
         self.render = renderer
 
@@ -362,9 +463,15 @@ class Hy3DBakeFromMultiview:
         multiviews = multiviews.cpu().numpy()
         multiviews_pil = [Image.fromarray((image.transpose(1, 2, 0) * 255).astype(np.uint8)) for image in multiviews]
 
-        selected_camera_azims = [0, 90, 180, 270, 0, 180]
-        selected_camera_elevs = [0, 0, 0, 0, 90, -90]
-        selected_view_weights = [1, 0.1, 0.5, 0.1, 0.05, 0.05]
+        if camera_config is None:
+            selected_camera_azims = [0, 90, 180, 270, 0, 180]
+            selected_camera_elevs = [0, 0, 0, 0, 90, -90]
+            selected_view_weights = [1, 0.1, 0.5, 0.1, 0.05, 0.05]
+        else:
+            selected_camera_azims = camera_config["selected_camera_azims"]
+            selected_camera_elevs = camera_config["selected_camera_elevs"]
+            selected_view_weights = camera_config["selected_view_weights"]
+
         merge_method = 'fast'
         self.bake_exp = 4
         
@@ -372,16 +479,11 @@ class Hy3DBakeFromMultiview:
                                                  selected_camera_elevs, selected_camera_azims, selected_view_weights,
                                                  method=merge_method)
         
-        mask_np = (mask.squeeze(-1).cpu().numpy() * 255).astype(np.uint8)
-
-        texture_np = self.render.uv_inpaint(texture, mask_np)
-        texture = torch.tensor(texture_np / 255).float().to(texture.device)
-        print(texture.shape)
-
-        self.render.set_texture(texture)
-        textured_mesh = self.render.save_mesh()
         
-        return (textured_mesh, texture.unsqueeze(0).cpu().float(),)
+        mask = mask.squeeze(-1).cpu().float()
+        texture = texture.unsqueeze(0).cpu().float()
+
+        return (texture, mask, self.render)
     
     def bake_from_multiview(self, views, camera_elevs,
                             camera_azims, view_weights, method='graphcut'):
@@ -404,6 +506,102 @@ class Hy3DBakeFromMultiview:
         else:
             raise f'no method {method}'
         return texture, ori_trust_map > 1E-8
+    
+class Hy3DInpaintTexture:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "texture": ("IMAGE", ),
+                "mask": ("MASK", ),
+                "renderer": ("MESHRENDER",),
+            },
+        }
+
+    RETURN_TYPES = ("IMAGE", "MASK", "MESHRENDER" ) 
+    RETURN_NAMES = ("texture", "mask", "renderer" )
+    FUNCTION = "process"
+    CATEGORY = "Hunyuan3DWrapper"
+
+    def process(self, texture, renderer, mask):
+        from .hy3dgen.texgen.differentiable_renderer.mesh_processor import meshVerticeInpaint
+        import cv2
+        vtx_pos, pos_idx, vtx_uv, uv_idx = renderer.get_mesh()
+
+        mask_np = (mask.squeeze(-1).squeeze(0).cpu().numpy() * 255).astype(np.uint8)
+        texture_np = texture.squeeze(0).cpu().numpy() * 255
+
+        texture_np, mask_np = meshVerticeInpaint(
+            texture_np, mask_np, vtx_pos, vtx_uv, pos_idx, uv_idx)
+            
+        texture_tensor = torch.from_numpy(texture_np).float() / 255.0
+        texture_tensor = texture_tensor.unsqueeze(0)
+
+        mask_tensor = torch.from_numpy(mask_np).float() / 255.0
+        mask_tensor = mask_tensor.unsqueeze(0)
+        
+        return (texture_tensor, mask_tensor, renderer)
+
+class CV2InpaintTexture:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "texture": ("IMAGE", ),
+                "mask": ("MASK", ),
+                "inpaint_radius": ("INT", {"default": 3, "min": 1, "max": 10, "step": 1}),
+                "inpaint_method": (["ns", "telea"], {"default": "ns"}),
+            },
+        }
+
+    RETURN_TYPES = ("IMAGE", ) 
+    RETURN_NAMES = ("texture", )
+    FUNCTION = "inpaint"
+    CATEGORY = "Hunyuan3DWrapper"
+
+    def inpaint(self, texture, mask, inpaint_radius, inpaint_method):
+        import cv2
+        mask = 1 - mask
+        mask_np = (mask.squeeze(-1).squeeze(0).cpu().numpy() * 255).astype(np.uint8)
+        texture_np = (texture.squeeze(0).cpu().numpy() * 255).astype(np.uint8)
+
+        if inpaint_method == "ns":
+            inpaint_algo = cv2.INPAINT_NS
+        elif inpaint_method == "telea":
+            inpaint_algo = cv2.INPAINT_TELEA
+            
+        texture_np = cv2.inpaint(
+            texture_np,
+            mask_np,
+            inpaint_radius,
+            inpaint_algo)
+        
+        texture_tensor = torch.from_numpy(texture_np).float() / 255.0
+        texture_tensor = texture_tensor.unsqueeze(0)
+        
+        return (texture_tensor, )
+    
+class Hy3DApplyTexture:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "texture": ("IMAGE", ),
+                "renderer": ("MESHRENDER",),
+            },
+        }
+
+    RETURN_TYPES = ("HY3DMESH", ) 
+    RETURN_NAMES = ("mesh", )
+    FUNCTION = "apply"
+    CATEGORY = "Hunyuan3DWrapper"
+
+    def apply(self, texture, renderer):
+        self.render = renderer
+        self.render.set_texture(texture.squeeze(0))
+        textured_mesh = self.render.save_mesh()
+        
+        return (textured_mesh,)
     
 class Hy3DGenerateMesh:
     @classmethod
@@ -532,7 +730,13 @@ NODE_CLASS_MAPPINGS = {
     "Hy3DRenderMultiView": Hy3DRenderMultiView,
     "Hy3DBakeFromMultiview": Hy3DBakeFromMultiview,
     "Hy3DTorchCompileSettings": Hy3DTorchCompileSettings,
-    "Hy3DPostprocessMesh": Hy3DPostprocessMesh
+    "Hy3DPostprocessMesh": Hy3DPostprocessMesh,
+    "Hy3DCameraConfig": Hy3DCameraConfig,
+    "Hy3DMeshUVWrap": Hy3DMeshUVWrap,
+    "Hy3DSampleMultiView": Hy3DSampleMultiView,
+    "Hy3DInpaintTexture": Hy3DInpaintTexture,
+    "Hy3DApplyTexture": Hy3DApplyTexture,
+    "CV2InpaintTexture": CV2InpaintTexture,
     }
 NODE_DISPLAY_NAME_MAPPINGS = {
     "Hy3DModelLoader": "Hy3DModelLoader",
@@ -544,5 +748,11 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "Hy3DRenderMultiView": "Hy3D Render MultiView",
     "Hy3DBakeFromMultiview": "Hy3D Bake From Multiview",
     "Hy3DTorchCompileSettings": "Hy3D Torch Compile Settings",
-    "Hy3DPostprocessMesh": "Hy3D Postprocess Mesh"
+    "Hy3DPostprocessMesh": "Hy3D Postprocess Mesh",
+    "Hy3DCameraConfig": "Hy3D Camera Config",
+    "Hy3DMeshUVWrap": "Hy3D Mesh UV Wrap",
+    "Hy3DSampleMultiView": "Hy3D Sample MultiView",
+    "Hy3DInpaintTexture": "Hy3D Inpaint Texture",
+    "Hy3DApplyTexture": "Hy3D Apply Texture",
+    "CV2InpaintTexture": "CV2 Inpaint Texture",
     }
