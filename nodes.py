@@ -153,7 +153,7 @@ class Hy3DLoadMesh:
     
     FUNCTION = "load"
     CATEGORY = "Hunyuan3DWrapper"
-    DESCRIPTION = "Encodes a text prompt using a CLIP model into an embedding that can be used to guide the diffusion model towards generating specific images."
+    DESCRIPTION = "Loads a glb model from the given path."
 
     def load(self, glb_path):
         
