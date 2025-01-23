@@ -422,24 +422,6 @@ class Hy3DSampleMultiView:
         
         return (out_tensors,)
     
-    def render_normal_multiview(self, camera_elevs, camera_azims, use_abs_coor=True):
-        normal_maps = []
-        for elev, azim in zip(camera_elevs, camera_azims):
-            normal_map = self.render.render_normal(
-                elev, azim, use_abs_coor=use_abs_coor, return_type='pl')
-            normal_maps.append(normal_map)
-
-        return normal_maps
-
-    def render_position_multiview(self, camera_elevs, camera_azims):
-        position_maps = []
-        for elev, azim in zip(camera_elevs, camera_azims):
-            position_map = self.render.render_position(
-                elev, azim, return_type='pl')
-            position_maps.append(position_map)
-
-        return position_maps
-    
 class Hy3DBakeFromMultiview:
     @classmethod
     def INPUT_TYPES(s):
@@ -525,7 +507,6 @@ class Hy3DInpaintTexture:
 
     def process(self, texture, renderer, mask):
         from .hy3dgen.texgen.differentiable_renderer.mesh_processor import meshVerticeInpaint
-        import cv2
         vtx_pos, pos_idx, vtx_uv, uv_idx = renderer.get_mesh()
 
         mask_np = (mask.squeeze(-1).squeeze(0).cpu().numpy() * 255).astype(np.uint8)
