@@ -555,7 +555,8 @@ NODE_CLASS_MAPPINGS = {
     "Hy3DRenderMultiView": Hy3DRenderMultiView,
     "Hy3DBakeFromMultiview": Hy3DBakeFromMultiview,
     "Hy3DTorchCompileSettings": Hy3DTorchCompileSettings,
-    "Hy3DPostprocessMesh": Hy3DPostprocessMesh
+    "Hy3DPostprocessMesh": Hy3DPostprocessMesh,
+    "LoadCustomMesh": LoadCustomMesh
     }
 NODE_DISPLAY_NAME_MAPPINGS = {
     "Hy3DModelLoader": "Hy3DModelLoader",
@@ -567,5 +568,6 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "Hy3DRenderMultiView": "Hy3D Render MultiView",
     "Hy3DBakeFromMultiview": "Hy3D Bake From Multiview",
     "Hy3DTorchCompileSettings": "Hy3D Torch Compile Settings",
-    "Hy3DPostprocessMesh": "Hy3D Postprocess Mesh"
+    "Hy3DPostprocessMesh": "Hy3D Postprocess Mesh",
+    "LoadCustomMesh": "Load Custom Mesh"
     }
