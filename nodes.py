@@ -489,7 +489,7 @@ class Hy3DBakeFromMultiview:
             raise f'no method {method}'
         return texture, ori_trust_map > 1E-8
     
-class Hy3DInpaintTexture:
+class Hy3DMeshVerticeInpaintTexture:
     @classmethod
     def INPUT_TYPES(s):
         return {
@@ -715,7 +715,7 @@ NODE_CLASS_MAPPINGS = {
     "Hy3DCameraConfig": Hy3DCameraConfig,
     "Hy3DMeshUVWrap": Hy3DMeshUVWrap,
     "Hy3DSampleMultiView": Hy3DSampleMultiView,
-    "Hy3DInpaintTexture": Hy3DInpaintTexture,
+    "Hy3DMeshVerticeInpaintTexture": Hy3DMeshVerticeInpaintTexture,
     "Hy3DApplyTexture": Hy3DApplyTexture,
     "CV2InpaintTexture": CV2InpaintTexture,
     }
@@ -733,7 +733,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "Hy3DCameraConfig": "Hy3D Camera Config",
     "Hy3DMeshUVWrap": "Hy3D Mesh UV Wrap",
     "Hy3DSampleMultiView": "Hy3D Sample MultiView",
-    "Hy3DInpaintTexture": "Hy3D Inpaint Texture",
+    "Hy3DMeshVerticeInpaintTexture": "Hy3D Mesh Vertice Inpaint Texture",
     "Hy3DApplyTexture": "Hy3D Apply Texture",
     "CV2InpaintTexture": "CV2 Inpaint Texture",
     }
