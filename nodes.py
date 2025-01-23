@@ -362,6 +362,57 @@ class Hy3DRenderMultiView:
 
         return position_maps
     
+class Hy3DRenderMultiViewDepth:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "mesh": ("HY3DMESH",),
+                "render_size": ("INT", {"default": 1024, "min": 64, "max": 4096, "step": 16}),
+                "texture_size": ("INT", {"default": 1024, "min": 64, "max": 4096, "step": 16}),
+            },
+            "optional": {
+                "camera_config": ("HY3DCAMERA",),
+            }
+        }
+
+    RETURN_TYPES = ("IMAGE", )
+    RETURN_NAMES = ("depth_maps", )
+    FUNCTION = "process"
+    CATEGORY = "Hunyuan3DWrapper"
+
+    def process(self, mesh, render_size, texture_size, camera_config=None):
+
+        from .hy3dgen.texgen.differentiable_renderer.mesh_render import MeshRender
+
+        self.render = MeshRender(
+            default_resolution=render_size,
+            texture_size=texture_size)
+
+        self.render.load_mesh(mesh)
+
+        if camera_config is None:
+            selected_camera_azims = [0, 90, 180, 270, 0, 180]
+            selected_camera_elevs = [0, 0, 0, 0, 90, -90]
+        else:
+            selected_camera_azims = camera_config["selected_camera_azims"]
+            selected_camera_elevs = camera_config["selected_camera_elevs"]
+
+        depth_maps = self.render_depth_multiview(
+            selected_camera_elevs, selected_camera_azims)
+        depth_tensors = torch.stack(depth_maps, dim=0)
+        depth_tensors = depth_tensors.repeat(1, 1, 1, 3)
+        
+        return (depth_tensors,)
+    
+    def render_depth_multiview(self, camera_elevs, camera_azims):
+        depth_maps = []
+        for elev, azim in zip(camera_elevs, camera_azims):        
+            depth_map = self.render.render_depth(elev, azim, return_type='th')
+            depth_maps.append(depth_map)
+
+        return depth_maps
+    
 class Hy3DSampleMultiView:
     @classmethod
     def INPUT_TYPES(s):
@@ -742,6 +793,7 @@ NODE_CLASS_MAPPINGS = {
     "Hy3DMeshVerticeInpaintTexture": Hy3DMeshVerticeInpaintTexture,
     "Hy3DApplyTexture": Hy3DApplyTexture,
     "CV2InpaintTexture": CV2InpaintTexture,
+    "Hy3DRenderMultiViewDepth": Hy3DRenderMultiViewDepth,
     }
 NODE_DISPLAY_NAME_MAPPINGS = {
     "Hy3DModelLoader": "Hy3DModelLoader",
@@ -761,4 +813,5 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "Hy3DMeshVerticeInpaintTexture": "Hy3D Mesh Vertice Inpaint Texture",
     "Hy3DApplyTexture": "Hy3D Apply Texture",
     "CV2InpaintTexture": "CV2 Inpaint Texture",
+    "Hy3DRenderMultiViewDepth": "Hy3D Render MultiView Depth",
     }
