@@ -3,6 +3,7 @@ import torch
 from PIL import Image
 from pathlib import Path
 import numpy as np
+import trimesh
 
 from .hy3dgen.shapegen import Hunyuan3DDiTFlowMatchingPipeline, FaceReducer, FloaterRemover, DegenerateFaceRemover
 
@@ -137,7 +138,29 @@ class DownloadAndLoadHy3DDelightModel:
         delight_pipe.enable_model_cpu_offload()
         
         return (delight_pipe,)
+
+class LoadCustomMesh:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "glb": ("STRING", {"default": "", "tooltip": "The glb path with mesh to load. Tested only for now with other hunyuan3d-2 glbs"}), 
+            }
+        }
+    RETURN_TYPES = ("HY3DMESH",)
+    RETURN_NAMES = ("mesh",)
+    OUTPUT_TOOLTIPS = ("The glb model with mesh to texturize.",)
     
+    FUNCTION = "main"
+    CATEGORY = "Hunyuan3DWrapper"
+    DESCRIPTION = "Encodes a text prompt using a CLIP model into an embedding that can be used to guide the diffusion model towards generating specific images."
+
+    def main(self, glb):
+        
+        mesh = trimesh.load(glb, force="mesh")
+        
+        return (mesh,)
+        
 class Hy3DDelightImage:
     @classmethod
     def INPUT_TYPES(s):
@@ -712,6 +735,7 @@ NODE_CLASS_MAPPINGS = {
     "Hy3DBakeFromMultiview": Hy3DBakeFromMultiview,
     "Hy3DTorchCompileSettings": Hy3DTorchCompileSettings,
     "Hy3DPostprocessMesh": Hy3DPostprocessMesh,
+    "LoadCustomMesh": LoadCustomMesh,
     "Hy3DCameraConfig": Hy3DCameraConfig,
     "Hy3DMeshUVWrap": Hy3DMeshUVWrap,
     "Hy3DSampleMultiView": Hy3DSampleMultiView,
@@ -730,6 +754,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "Hy3DBakeFromMultiview": "Hy3D Bake From Multiview",
     "Hy3DTorchCompileSettings": "Hy3D Torch Compile Settings",
     "Hy3DPostprocessMesh": "Hy3D Postprocess Mesh",
+    "LoadCustomMesh": "Load Custom Mesh",
     "Hy3DCameraConfig": "Hy3D Camera Config",
     "Hy3DMeshUVWrap": "Hy3D Mesh UV Wrap",
     "Hy3DSampleMultiView": "Hy3D Sample MultiView",
