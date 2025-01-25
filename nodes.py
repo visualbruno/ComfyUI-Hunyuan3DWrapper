@@ -828,6 +828,36 @@ class Hy3DSetMeshPBRTextures:
         setattr(new_mesh.visual.material, texture_attr, pil_image)
             
         return (new_mesh,)
+
+class Hy3DSetMeshPBRAttributes:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "mesh": ("HY3DMESH",),
+                "baseColorFactor": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.01}),
+                "emissiveFactor": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 1.0, "step": 0.01}),
+                "metallicFactor": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 1.0, "step": 0.01}),
+                "roughnessFactor": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 1.0, "step": 0.01}),
+                "doubleSided": ("BOOLEAN", {"default": False}),
+            },
+        }
+
+    RETURN_TYPES = ("HY3DMESH", )
+    RETURN_NAMES = ("mesh",)
+    FUNCTION = "set_textures"
+    CATEGORY = "Hunyuan3DWrapper"
+
+    def set_textures(self, mesh, baseColorFactor, emissiveFactor, metallicFactor, roughnessFactor, doubleSided):
+        
+        new_mesh = mesh.copy()
+        new_mesh.visual.material.baseColorFactor = [baseColorFactor, baseColorFactor, baseColorFactor, 1.0]
+        new_mesh.visual.material.emissiveFactor = [emissiveFactor, emissiveFactor, emissiveFactor]
+        new_mesh.visual.material.metallicFactor = metallicFactor        
+        new_mesh.visual.material.roughnessFactor = roughnessFactor
+        new_mesh.visual.material.doubleSided = doubleSided
+            
+        return (new_mesh,)
     
 class Hy3DExportMesh:
     @classmethod
@@ -874,7 +904,8 @@ NODE_CLASS_MAPPINGS = {
     "CV2InpaintTexture": CV2InpaintTexture,
     "Hy3DRenderMultiViewDepth": Hy3DRenderMultiViewDepth,
     "Hy3DGetMeshPBRTextures": Hy3DGetMeshPBRTextures,
-    "Hy3DSetMeshPBRTextures": Hy3DSetMeshPBRTextures
+    "Hy3DSetMeshPBRTextures": Hy3DSetMeshPBRTextures,
+    "Hy3DSetMeshPBRAttributes": Hy3DSetMeshPBRAttributes
     }
 NODE_DISPLAY_NAME_MAPPINGS = {
     "Hy3DModelLoader": "Hy3DModelLoader",
@@ -896,5 +927,6 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "CV2InpaintTexture": "CV2 Inpaint Texture",
     "Hy3DRenderMultiViewDepth": "Hy3D Render MultiView Depth",
     "Hy3DGetMeshPBRTextures": "Hy3D Get Mesh PBR Textures",
-    "Hy3DSetMeshPBRTextures": "Hy3D Set Mesh PBR Textures"
+    "Hy3DSetMeshPBRTextures": "Hy3D Set Mesh PBR Textures",
+    "Hy3DSetMeshPBRAttributes": "Hy3D Set Mesh PBR Attributes"
     }
