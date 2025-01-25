@@ -1,5 +1,6 @@
 import os
 import torch
+import torchvision.transforms as transforms
 from PIL import Image
 from pathlib import Path
 import numpy as np
@@ -14,7 +15,7 @@ from comfy.utils import load_torch_file, ProgressBar
 
 script_directory = os.path.dirname(os.path.abspath(__file__))
 
-from .utils import log, print_memory, pil_list_to_torch_batch
+from .utils import log, print_memory
 
 class ComfyProgressCallback:
     def __init__(self, total_steps):
@@ -138,28 +139,6 @@ class DownloadAndLoadHy3DDelightModel:
         delight_pipe.enable_model_cpu_offload()
         
         return (delight_pipe,)
-
-class Hy3DLoadMesh:
-    @classmethod
-    def INPUT_TYPES(s):
-        return {
-            "required": {
-                "glb_path": ("STRING", {"default": "", "tooltip": "The glb path with mesh to load."}), 
-            }
-        }
-    RETURN_TYPES = ("HY3DMESH",)
-    RETURN_NAMES = ("mesh",)
-    OUTPUT_TOOLTIPS = ("The glb model with mesh to texturize.",)
-    
-    FUNCTION = "load"
-    CATEGORY = "Hunyuan3DWrapper"
-    DESCRIPTION = "Loads a glb model from the given path."
-
-    def load(self, glb_path):
-        
-        mesh = trimesh.load(glb_path, force="mesh")
-        
-        return (mesh,)
         
 class Hy3DDelightImage:
     @classmethod
@@ -249,6 +228,7 @@ class DownloadAndLoadHy3DPaintModel:
         pipeline.enable_model_cpu_offload()
         return (pipeline,)
 
+#region Texture
 class Hy3DCameraConfig:
     @classmethod
     def INPUT_TYPES(s):
@@ -661,7 +641,31 @@ class Hy3DApplyTexture:
         textured_mesh = self.render.save_mesh()
         
         return (textured_mesh,)
+
+#region Mesh
+
+class Hy3DLoadMesh:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "glb_path": ("STRING", {"default": "", "tooltip": "The glb path with mesh to load."}), 
+            }
+        }
+    RETURN_TYPES = ("HY3DMESH",)
+    RETURN_NAMES = ("mesh",)
+    OUTPUT_TOOLTIPS = ("The glb model with mesh to texturize.",)
     
+    FUNCTION = "load"
+    CATEGORY = "Hunyuan3DWrapper"
+    DESCRIPTION = "Loads a glb model from the given path."
+
+    def load(self, glb_path):
+        
+        mesh = trimesh.load(glb_path, force="mesh")
+        
+        return (mesh,)
+
 class Hy3DGenerateMesh:
     @classmethod
     def INPUT_TYPES(s):
@@ -754,6 +758,77 @@ class Hy3DPostprocessMesh:
         
         return (mesh, )
     
+class Hy3DGetMeshPBRTextures:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "mesh": ("HY3DMESH",),
+                "texture" : (["base_color", "emissive", "metallic_roughness", "normal", "occlusion"], ),
+            },
+        }
+
+    RETURN_TYPES = ("IMAGE", )
+    RETURN_NAMES = ("image",)
+    FUNCTION = "get_textures"
+    CATEGORY = "Hunyuan3DWrapper"
+
+    def get_textures(self, mesh, texture):
+        
+        TEXTURE_MAPPING = {
+            'base_color': ('baseColorTexture', "Base color"),
+            'emissive': ('emissiveTexture', "Emissive"),
+            'metallic_roughness': ('metallicRoughnessTexture', "Metallic roughness"),
+            'normal': ('normalTexture', "Normal"),
+            'occlusion': ('occlusionTexture', "Occlusion"),
+        }
+        
+        texture_attr, texture_name = TEXTURE_MAPPING[texture]
+        texture_data = getattr(mesh.visual.material, texture_attr)
+        
+        if texture_data is None:
+            raise ValueError(f"{texture_name} texture not found")
+            
+        to_tensor = transforms.ToTensor()
+        return (to_tensor(texture_data).unsqueeze(0).permute(0, 2, 3, 1).cpu().float(),)
+    
+class Hy3DSetMeshPBRTextures:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "mesh": ("HY3DMESH",),
+                "image": ("IMAGE", ),
+                "texture" : (["base_color", "emissive", "metallic_roughness", "normal", "occlusion"], ),
+            },
+        }
+
+    RETURN_TYPES = ("HY3DMESH", )
+    RETURN_NAMES = ("mesh",)
+    FUNCTION = "set_textures"
+    CATEGORY = "Hunyuan3DWrapper"
+
+    def set_textures(self, mesh, image, texture):
+        
+        TEXTURE_MAPPING = {
+            'base_color': ('baseColorTexture', "Base color"),
+            'emissive': ('emissiveTexture', "Emissive"),
+            'metallic_roughness': ('metallicRoughnessTexture', "Metallic roughness"),
+            'normal': ('normalTexture', "Normal"),
+            'occlusion': ('occlusionTexture', "Occlusion"),
+        }
+        new_mesh = mesh.copy()
+        texture_attr, texture_name = TEXTURE_MAPPING[texture]
+        image_np = (image[0].cpu().numpy() * 255).astype(np.uint8)
+        if image_np.shape[2] == 4:  # RGBA
+            pil_image = Image.fromarray(image_np, 'RGBA')
+        else:  # RGB
+            pil_image = Image.fromarray(image_np, 'RGB')
+            
+        setattr(new_mesh.visual.material, texture_attr, pil_image)
+            
+        return (new_mesh,)
+    
 class Hy3DExportMesh:
     @classmethod
     def INPUT_TYPES(s):
@@ -798,6 +873,8 @@ NODE_CLASS_MAPPINGS = {
     "Hy3DApplyTexture": Hy3DApplyTexture,
     "CV2InpaintTexture": CV2InpaintTexture,
     "Hy3DRenderMultiViewDepth": Hy3DRenderMultiViewDepth,
+    "Hy3DGetMeshPBRTextures": Hy3DGetMeshPBRTextures,
+    "Hy3DSetMeshPBRTextures": Hy3DSetMeshPBRTextures
     }
 NODE_DISPLAY_NAME_MAPPINGS = {
     "Hy3DModelLoader": "Hy3DModelLoader",
@@ -818,4 +895,6 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "Hy3DApplyTexture": "Hy3D Apply Texture",
     "CV2InpaintTexture": "CV2 Inpaint Texture",
     "Hy3DRenderMultiViewDepth": "Hy3D Render MultiView Depth",
+    "Hy3DGetMeshPBRTextures": "Hy3D Get Mesh PBR Textures",
+    "Hy3DSetMeshPBRTextures": "Hy3D Set Mesh PBR Textures"
     }
