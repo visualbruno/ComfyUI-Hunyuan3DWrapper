@@ -737,6 +737,7 @@ class Hy3DPostprocessMesh:
                 "remove_degenerate_faces": ("BOOLEAN", {"default": True}),
                 "reduce_faces": ("BOOLEAN", {"default": True}),
                 "max_facenum": ("INT", {"default": 40000, "min": 1, "max": 10000000, "step": 1}),
+                "smooth_normals": ("BOOLEAN", {"default": False}),
             },
         }
 
@@ -745,18 +746,22 @@ class Hy3DPostprocessMesh:
     FUNCTION = "process"
     CATEGORY = "Hunyuan3DWrapper"
 
-    def process(self, mesh, remove_floaters, remove_degenerate_faces, reduce_faces, max_facenum):
+    def process(self, mesh, remove_floaters, remove_degenerate_faces, reduce_faces, max_facenum, smooth_normals):
+        new_mesh = mesh.copy()
         if remove_floaters:
-            mesh = FloaterRemover()(mesh)
-            log.info(f"Removed floaters, resulting in {mesh.vertices.shape[0]} vertices and {mesh.faces.shape[0]} faces")
+            new_mesh = FloaterRemover()(new_mesh)
+            log.info(f"Removed floaters, resulting in {new_mesh.vertices.shape[0]} vertices and {new_mesh.faces.shape[0]} faces")
         if remove_degenerate_faces:
-            mesh = DegenerateFaceRemover()(mesh)
-            log.info(f"Removed degenerate faces, resulting in {mesh.vertices.shape[0]} vertices and {mesh.faces.shape[0]} faces")
+            new_mesh = DegenerateFaceRemover()(new_mesh)
+            log.info(f"Removed degenerate faces, resulting in {new_mesh.vertices.shape[0]} vertices and {new_mesh.faces.shape[0]} faces")
         if reduce_faces:
-            mesh = FaceReducer()(mesh, max_facenum=max_facenum)
-            log.info(f"Reduced faces, resulting in {mesh.vertices.shape[0]} vertices and {mesh.faces.shape[0]} faces")
+            new_mesh = FaceReducer()(new_mesh, max_facenum=max_facenum)
+            log.info(f"Reduced faces, resulting in {new_mesh.vertices.shape[0]} vertices and {new_mesh.faces.shape[0]} faces")
+        if smooth_normals:              
+            new_mesh.vertex_normals = trimesh.smoothing.get_vertices_normals(new_mesh)
+
         
-        return (mesh, )
+        return (new_mesh, )
     
 class Hy3DGetMeshPBRTextures:
     @classmethod
