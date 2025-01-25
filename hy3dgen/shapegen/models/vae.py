@@ -31,7 +31,7 @@ import torch.nn.functional as F
 from einops import rearrange, repeat
 from skimage import measure
 from tqdm import tqdm
-
+from sageattention import sageattn
 from comfy.utils import ProgressBar
 
 class FourierEmbedder(nn.Module):
@@ -189,13 +189,18 @@ class QKVMultiheadCrossAttention(nn.Module):
         n_data: Optional[int] = None,
         width=None,
         qk_norm=False,
-        norm_layer=nn.LayerNorm
+        norm_layer=nn.LayerNorm,
+        attention_mode: str = "sdpa"
     ):
         super().__init__()
         self.heads = heads
         self.n_data = n_data
         self.q_norm = norm_layer(width // heads, elementwise_affine=True, eps=1e-6) if qk_norm else nn.Identity()
         self.k_norm = norm_layer(width // heads, elementwise_affine=True, eps=1e-6) if qk_norm else nn.Identity()
+        if attention_mode == "sdpa":
+            self.attention_func = F.scaled_dot_product_attention
+        elif attention_mode == "sageattn":
+            self.attention_func = sageattn
 
     def forward(self, q, kv):
         _, n_ctx, _ = q.shape
@@ -209,7 +214,7 @@ class QKVMultiheadCrossAttention(nn.Module):
         k = self.k_norm(k)
 
         q, k, v = map(lambda t: rearrange(t, 'b n h d -> b h n d', h=self.heads), (q, k, v))
-        out = F.scaled_dot_product_attention(q, k, v).transpose(1, 2).reshape(bs, n_ctx, -1)
+        out = self.attention_func(q, k, v).transpose(1, 2).reshape(bs, n_ctx, -1)
 
         return out
 
@@ -224,7 +229,8 @@ class MultiheadCrossAttention(nn.Module):
         n_data: Optional[int] = None,
         data_width: Optional[int] = None,
         norm_layer=nn.LayerNorm,
-        qk_norm: bool = False
+        qk_norm: bool = False,
+        attention_mode: str = "sdpa"
     ):
         super().__init__()
         self.n_data = n_data
@@ -239,7 +245,8 @@ class MultiheadCrossAttention(nn.Module):
             n_data=n_data,
             width=width,
             norm_layer=norm_layer,
-            qk_norm=qk_norm
+            qk_norm=qk_norm,
+            attention_mode=attention_mode
         )
 
     def forward(self, x, data):
@@ -260,12 +267,15 @@ class ResidualCrossAttentionBlock(nn.Module):
         data_width: Optional[int] = None,
         qkv_bias: bool = True,
         norm_layer=nn.LayerNorm,
-        qk_norm: bool = False
+        qk_norm: bool = False,
+        attention_mode: str = "sdpa"
     ):
         super().__init__()
 
         if data_width is None:
             data_width = width
+        
+        self.attention_mode = attention_mode
 
         self.attn = MultiheadCrossAttention(
             n_data=n_data,
@@ -274,7 +284,8 @@ class ResidualCrossAttentionBlock(nn.Module):
             data_width=data_width,
             qkv_bias=qkv_bias,
             norm_layer=norm_layer,
-            qk_norm=qk_norm
+            qk_norm=qk_norm,
+            attention_mode=self.attention_mode
         )
         self.ln_1 = norm_layer(width, elementwise_affine=True, eps=1e-6)
         self.ln_2 = norm_layer(data_width, elementwise_affine=True, eps=1e-6)
@@ -295,13 +306,18 @@ class QKVMultiheadAttention(nn.Module):
         n_ctx: int,
         width=None,
         qk_norm=False,
-        norm_layer=nn.LayerNorm
+        norm_layer=nn.LayerNorm,
+        attention_mode: str = "sdpa"
     ):
         super().__init__()
         self.heads = heads
         self.n_ctx = n_ctx
         self.q_norm = norm_layer(width // heads, elementwise_affine=True, eps=1e-6) if qk_norm else nn.Identity()
         self.k_norm = norm_layer(width // heads, elementwise_affine=True, eps=1e-6) if qk_norm else nn.Identity()
+        if attention_mode == "sdpa":
+            self.attention_func = F.scaled_dot_product_attention
+        elif attention_mode == "sageattn":
+            self.attention_func = sageattn
 
     def forward(self, qkv):
         bs, n_ctx, width = qkv.shape
@@ -313,7 +329,7 @@ class QKVMultiheadAttention(nn.Module):
         k = self.k_norm(k)
 
         q, k, v = map(lambda t: rearrange(t, 'b n h d -> b h n d', h=self.heads), (q, k, v))
-        out = F.scaled_dot_product_attention(q, k, v).transpose(1, 2).reshape(bs, n_ctx, -1)
+        out = self.attention_func(q, k, v).transpose(1, 2).reshape(bs, n_ctx, -1)
         return out
 
 
@@ -433,7 +449,8 @@ class CrossAttentionDecoder(nn.Module):
         heads: int,
         qkv_bias: bool = True,
         qk_norm: bool = False,
-        label_type: str = "binary"
+        label_type: str = "binary",
+        attention_mode: str = "sdpa"
     ):
         super().__init__()
 
@@ -446,7 +463,8 @@ class CrossAttentionDecoder(nn.Module):
             width=width,
             heads=heads,
             qkv_bias=qkv_bias,
-            qk_norm=qk_norm
+            qk_norm=qk_norm,
+            attention_mode=attention_mode
         )
 
         self.ln_post = nn.LayerNorm(width)
@@ -514,6 +532,7 @@ class ShapeVAE(nn.Module):
         label_type: str = "binary",
         drop_path_rate: float = 0.0,
         scale_factor: float = 1.0,
+        attention_mode: str = "sdpa"
     ):
         super().__init__()
         self.fourier_embedder = FourierEmbedder(num_freqs=num_freqs, include_pi=include_pi)
@@ -539,10 +558,13 @@ class ShapeVAE(nn.Module):
             qkv_bias=qkv_bias,
             qk_norm=qk_norm,
             label_type=label_type,
+            attention_mode=attention_mode
         )
 
         self.scale_factor = scale_factor
         self.latent_shape = (num_latents, embed_dim)
+
+        self.attention_mode = attention_mode
 
     def forward(self, latents):
         latents = self.post_kl(latents)

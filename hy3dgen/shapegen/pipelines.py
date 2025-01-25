@@ -153,6 +153,7 @@ class Hunyuan3DDiTPipeline:
         dtype=torch.float16,
         use_safetensors=None,
         compile_args=None,
+        attention_mode="sdpa",
         **kwargs,
     ):
         # load config
@@ -179,17 +180,19 @@ class Hunyuan3DDiTPipeline:
                 ckpt[model_name][new_key] = value
         else:
             ckpt = torch.load(ckpt_path, map_location='cpu')
+
+        
         # load model
+        config['model']['params']['attention_mode'] = attention_mode
+        config['vae']['params']['attention_mode'] = attention_mode
         with init_empty_weights():
             model = instantiate_from_config(config['model'])
             vae = instantiate_from_config(config['vae'])
             conditioner = instantiate_from_config(config['conditioner'])
         #model
-        #model.load_state_dict(ckpt['model'])
         for name, param in model.named_parameters():
             set_module_tensor_to_device(model, name, device=offload_device, dtype=dtype, value=ckpt['model'][name])
         #vae
-        #vae.load_state_dict(ckpt['vae'])
         for name, param in vae.named_parameters():
             set_module_tensor_to_device(vae, name, device=offload_device, dtype=dtype, value=ckpt['vae'][name])       
         

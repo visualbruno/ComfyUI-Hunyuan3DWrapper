@@ -31,11 +31,21 @@ from einops import rearrange
 from torch import Tensor, nn
 
 
+
 def attention(q: Tensor, k: Tensor, v: Tensor, **kwargs) -> Tensor:
     x = torch.nn.functional.scaled_dot_product_attention(q, k, v)
     x = rearrange(x, "B H L D -> B L (H D)")
     return x
 
+try:
+    from sageattention import sageattn
+except ImportError:
+    sageattn = None
+    
+def attention_sage(q: Tensor, k: Tensor, v: Tensor, **kwargs) -> Tensor:
+    x = sageattn(q, k, v)
+    x = rearrange(x, "B H L D -> B L (H D)")
+    return x
 
 def timestep_embedding(t: Tensor, dim, max_period=10000, time_factor: float = 1000.0):
     """
@@ -151,7 +161,12 @@ class DoubleStreamBlock(nn.Module):
         num_heads: int,
         mlp_ratio: float,
         qkv_bias: bool = False,
+        attention_mode: str = "sdpa",
     ):
+        if attention_mode == "sdpa":
+            self.attention_func = attention
+        elif attention_mode == "sageattn":
+            self.attention_func = attention_sage
         super().__init__()
         mlp_hidden_dim = int(hidden_size * mlp_ratio)
         self.num_heads = num_heads
@@ -198,7 +213,7 @@ class DoubleStreamBlock(nn.Module):
         k = torch.cat((txt_k, img_k), dim=2)
         v = torch.cat((txt_v, img_v), dim=2)
 
-        attn = attention(q, k, v, pe=pe)
+        attn = self.attention_func(q, k, v, pe=pe)
         txt_attn, img_attn = attn[:, : txt.shape[1]], attn[:, txt.shape[1]:]
 
         img = img + img_mod1.gate * self.img_attn.proj(img_attn)
@@ -221,8 +236,13 @@ class SingleStreamBlock(nn.Module):
         num_heads: int,
         mlp_ratio: float = 4.0,
         qk_scale: Optional[float] = None,
+        attention_mode: str = "sdpa",
     ):
         super().__init__()
+        if attention_mode == "sdpa":
+            self.attention_func = attention
+        elif attention_mode == "sageattn":
+            self.attention_func = attention_sage
 
         self.hidden_dim = hidden_size
         self.num_heads = num_heads
@@ -253,7 +273,7 @@ class SingleStreamBlock(nn.Module):
         q, k = self.norm(q, k, v)
 
         # compute attention
-        attn = attention(q, k, v, pe=pe)
+        attn = self.attention_func(q, k, v, pe=pe)
         # compute activation in mlp stream, cat again and run second linear layer
         output = self.linear2(torch.cat((attn, self.mlp_act(mlp)), 2))
         return x + mod.gate * output
@@ -288,6 +308,7 @@ class Hunyuan3DDiT(nn.Module):
         qkv_bias: bool = True,
         time_factor: float = 1000,
         ckpt_path: Optional[str] = None,
+        attention_mode: str = "sdpa",
         **kwargs,
     ):
         super().__init__()
@@ -303,6 +324,7 @@ class Hunyuan3DDiT(nn.Module):
         self.qkv_bias = qkv_bias
         self.time_factor = time_factor
         self.out_channels = self.in_channels
+        self.attention_mode = attention_mode
 
         if hidden_size % num_heads != 0:
             raise ValueError(
@@ -324,6 +346,7 @@ class Hunyuan3DDiT(nn.Module):
                     self.num_heads,
                     mlp_ratio=mlp_ratio,
                     qkv_bias=qkv_bias,
+                    attention_mode=self.attention_mode,
                 )
                 for _ in range(depth)
             ]
@@ -335,12 +358,15 @@ class Hunyuan3DDiT(nn.Module):
                     self.hidden_size,
                     self.num_heads,
                     mlp_ratio=mlp_ratio,
+                    attention_mode=self.attention_mode,
                 )
                 for _ in range(depth_single_blocks)
             ]
         )
 
         self.final_layer = LastLayer(self.hidden_size, 1, self.out_channels)
+
+        
 
         if ckpt_path is not None:
             print('restored denoiser ckpt', ckpt_path)

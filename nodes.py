@@ -73,6 +73,7 @@ class Hy3DModelLoader:
             },
             "optional": {
                 "compile_args": ("HY3DCOMPILEARGS", {"tooltip": "torch.compile settings, when connected to the model loader, torch.compile of the selected models is attempted. Requires Triton and torch 2.5.0 is recommended"}),
+                "attention_mode": (["sdpa", "sageattn"], {"default": "sdpa"}),
             }
         }
 
@@ -81,7 +82,7 @@ class Hy3DModelLoader:
     FUNCTION = "loadmodel"
     CATEGORY = "Hunyuan3DWrapper"
 
-    def loadmodel(self, model, compile_args=None):
+    def loadmodel(self, model, compile_args=None, attention_mode="sdpa"):
         device = mm.get_torch_device()
         offload_device=mm.unet_offload_device()
 
@@ -93,7 +94,9 @@ class Hy3DModelLoader:
             use_safetensors=True, 
             device=device, 
             offload_device=offload_device,
-            compile_args=compile_args)
+            compile_args=compile_args,
+            attention_mode=attention_mode)
+        
         return (pipe,)
 
 class DownloadAndLoadHy3DDelightModel:
