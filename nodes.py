@@ -814,6 +814,11 @@ class Hy3DSetMeshPBRTextures:
     CATEGORY = "Hunyuan3DWrapper"
 
     def set_textures(self, mesh, image, texture):
+        from trimesh.visual.material import SimpleMaterial
+        if isinstance(mesh.visual.material, SimpleMaterial):
+            log.info("Found SimpleMaterial, Converting to PBRMaterial")
+            mesh.visual.material = mesh.visual.material.to_pbr()
+
         
         TEXTURE_MAPPING = {
             'base_color': ('baseColorTexture', "Base color"),
