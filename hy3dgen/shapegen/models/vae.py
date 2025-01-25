@@ -31,7 +31,10 @@ import torch.nn.functional as F
 from einops import rearrange, repeat
 from skimage import measure
 from tqdm import tqdm
-from sageattention import sageattn
+try:
+    from sageattention import sageattn
+except ImportError:
+    sageattn = None
 from comfy.utils import ProgressBar
 
 class FourierEmbedder(nn.Module):
