@@ -240,6 +240,7 @@ class Hy3DCameraConfig:
                 "camera_azimuths": ("STRING", {"default": "0, 90, 180, 270, 0, 180", "multiline": False}),
                 "camera_elevations": ("STRING", {"default": "0, 0, 0, 0, 90, -90", "multiline": False}),
                 "view_weights": ("STRING", {"default": "1, 0.1, 0.5, 0.1, 0.05, 0.05", "multiline": False}),
+                "camera_distance": ("FLOAT", {"default": 1.45, "min": 0.1, "max": 10.0, "step": 0.001}),
             },
         }
 
@@ -248,7 +249,7 @@ class Hy3DCameraConfig:
     FUNCTION = "process"
     CATEGORY = "Hunyuan3DWrapper"
 
-    def process(self, camera_azimuths, camera_elevations, view_weights):
+    def process(self, camera_azimuths, camera_elevations, view_weights, camera_distance):
         angles_list = list(map(int, camera_azimuths.replace(" ", "").split(',')))
         elevations_list = list(map(int, camera_elevations.replace(" ", "").split(',')))
         weights_list = list(map(float, view_weights.replace(" ", "").split(',')))
@@ -256,7 +257,8 @@ class Hy3DCameraConfig:
         camera_config = {
             "selected_camera_azims": angles_list,
             "selected_camera_elevs": elevations_list,
-            "selected_view_weights": weights_list
+            "selected_view_weights": weights_list,
+            "camera_distance": camera_distance
             }
         
         return (camera_config,)
@@ -304,18 +306,21 @@ class Hy3DRenderMultiView:
 
         from .hy3dgen.texgen.differentiable_renderer.mesh_render import MeshRender
 
-        self.render = MeshRender(
-            default_resolution=render_size,
-            texture_size=texture_size)
-
-        self.render.load_mesh(mesh)
-
         if camera_config is None:
             selected_camera_azims = [0, 90, 180, 270, 0, 180]
             selected_camera_elevs = [0, 0, 0, 0, 90, -90]
+            camera_distance = 1.45
         else:
             selected_camera_azims = camera_config["selected_camera_azims"]
             selected_camera_elevs = camera_config["selected_camera_elevs"]
+            camera_distance = camera_config["camera_distance"]
+        
+        self.render = MeshRender(
+            default_resolution=render_size,
+            texture_size=texture_size,
+            camera_distance=camera_distance)
+
+        self.render.load_mesh(mesh)
 
         normal_maps = self.render_normal_multiview(
             selected_camera_elevs, selected_camera_azims, use_abs_coor=True)
@@ -368,18 +373,23 @@ class Hy3DRenderMultiViewDepth:
 
         from .hy3dgen.texgen.differentiable_renderer.mesh_render import MeshRender
 
-        self.render = MeshRender(
-            default_resolution=render_size,
-            texture_size=texture_size)
-
-        self.render.load_mesh(mesh)
-
         if camera_config is None:
             selected_camera_azims = [0, 90, 180, 270, 0, 180]
             selected_camera_elevs = [0, 0, 0, 0, 90, -90]
+            camera_distance = 1.45
         else:
             selected_camera_azims = camera_config["selected_camera_azims"]
             selected_camera_elevs = camera_config["selected_camera_elevs"]
+            camera_distance = camera_config["camera_distance"]
+
+        self.render = MeshRender(
+            default_resolution=render_size,
+            texture_size=texture_size,
+            camera_distance=camera_distance)
+
+        self.render.load_mesh(mesh)
+
+       
 
         depth_maps = self.render_depth_multiview(
             selected_camera_elevs, selected_camera_azims)

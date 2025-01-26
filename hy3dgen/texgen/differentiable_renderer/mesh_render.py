@@ -141,6 +141,7 @@ class MeshRender():
         self.set_default_texture_resolution(texture_size)
 
         self.camera_distance = camera_distance
+        print(f'camera_distance: {camera_distance}')
         self.use_antialias = use_antialias
         self.max_mip_level = max_mip_level
         self.filter_mode = filter_mode
