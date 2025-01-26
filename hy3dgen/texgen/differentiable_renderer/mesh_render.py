@@ -151,6 +151,8 @@ class MeshRender():
             (2 / 512) * max(self.default_resolution[0], self.default_resolution[1]))
         self.bake_mode = bake_mode
 
+        self.tex = None
+
         self.raster_mode = raster_mode
         if self.raster_mode == 'cr':
             import custom_rasterizer as cr
@@ -442,10 +444,11 @@ class MeshRender():
         bg_color=[1, 1, 1],
         use_abs_coor=False,
         normalize_rgb=True,
-        return_type='th'
-    ):
-
-        pos_camera, pos_clip = self.get_pos_from_mvp(elev, azim, camera_distance, center)
+        return_type='th',
+        pan_x=0.0,
+        pan_y=0.0
+        ):
+        pos_camera, pos_clip = self.get_pos_from_mvp(elev, azim, camera_distance, center, pan_y=pan_y, pan_x=pan_x)
         if resolution is None:
             resolution = self.default_resolution
         if isinstance(resolution, (int, float)):
@@ -499,7 +502,7 @@ class MeshRender():
             image = image.cpu().numpy() * 255
             image = Image.fromarray(image.astype(np.uint8))
 
-        return image
+        return image, visible_mask
 
     def convert_normal_map(self, image):
         # blue is front, red is left, green is top
@@ -520,13 +523,16 @@ class MeshRender():
 
         return Image.fromarray(image)
 
-    def get_pos_from_mvp(self, elev, azim, camera_distance, center):
+    def get_pos_from_mvp(self, elev, azim, camera_distance, center, pan_y=0.0, pan_x=0.0):
         proj = self.camera_proj_mat
         r_mv = get_mv_matrix(
             elev=elev,
             azim=azim,
             camera_distance=self.camera_distance if camera_distance is None else camera_distance,
-            center=center)
+            center=center,
+            pan_x=pan_x,
+            pan_y=pan_y
+            )
 
         pos_camera = transform_pos(r_mv, self.vtx_pos, keepdim=True)
         pos_clip = transform_pos(proj, pos_camera)
@@ -540,9 +546,11 @@ class MeshRender():
         camera_distance=None,
         center=None,
         resolution=None,
-        return_type='th'
+        return_type='th',
+        pan_x=0.0,
+        pan_y=0.0
     ):
-        pos_camera, pos_clip = self.get_pos_from_mvp(elev, azim, camera_distance, center)
+        pos_camera, pos_clip = self.get_pos_from_mvp(elev, azim, camera_distance, center, pan_y=pan_y, pan_x=pan_x)
 
         if resolution is None:
             resolution = self.default_resolution

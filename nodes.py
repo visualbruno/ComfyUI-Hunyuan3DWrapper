@@ -340,7 +340,109 @@ class Hy3DRenderMultiView:
     def render_normal_multiview(self, camera_elevs, camera_azims, use_abs_coor=True):
         normal_maps = []
         for elev, azim in zip(camera_elevs, camera_azims):
-            normal_map = self.render.render_normal(
+            normal_map, _ = self.render.render_normal(
+                elev, azim, use_abs_coor=use_abs_coor, return_type='th')
+            normal_maps.append(normal_map)
+
+        return normal_maps
+
+    def render_position_multiview(self, camera_elevs, camera_azims):
+        position_maps = []
+        for elev, azim in zip(camera_elevs, camera_azims):
+            position_map = self.render.render_position(
+                elev, azim, return_type='th')
+            position_maps.append(position_map)
+
+        return position_maps
+    
+class Hy3DRenderSingleView:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "mesh": ("HY3DMESH",),
+                "render_type": (["normal", "depth"], {"default": "normal"}),
+                "render_size": ("INT", {"default": 1024, "min": 64, "max": 4096, "step": 16}),
+                "camera_type": (["orth", "perspective"], {"default": "orth"}),
+                "camera_distance": ("FLOAT", {"default": 1.45, "min": 0.1, "max": 10.0, "step": 0.001}),
+                "pan_x": ("FLOAT", {"default": 0.0, "min": -1.0, "max": 1.0, "step": 0.01}),
+                "pan_y": ("FLOAT", {"default": 0.0, "min": -1.0, "max": 1.0, "step": 0.01}),
+                "ortho_scale": ("FLOAT", {"default": 1.2, "min": 0.1, "max": 10.0, "step": 0.001}),
+                "azimuth": ("FLOAT", {"default": 0, "min": -360, "max": 360, "step": 1}),
+                "elevation": ("FLOAT", {"default": 0, "min": -360, "max": 360, "step": 1}),
+                "bg_color": ("STRING", {"default": "0, 0, 0", "tooltip": "Color as RGB values in range 0-255, separated by commas."}),
+            },
+        }
+
+    RETURN_TYPES = ("IMAGE",)
+    RETURN_NAMES = ("image", )
+    FUNCTION = "process"
+    CATEGORY = "Hunyuan3DWrapper"
+
+    def process(self, mesh, render_type, camera_type, ortho_scale, camera_distance, pan_x, pan_y, render_size, azimuth, elevation, bg_color):
+
+        from .hy3dgen.texgen.differentiable_renderer.mesh_render import MeshRender
+
+        bg_color = [int(x.strip())/255.0 for x in bg_color.split(",")]
+
+        self.render = MeshRender(
+            default_resolution=render_size,
+            texture_size=1024,
+            camera_distance=camera_distance,
+            camera_type=camera_type,
+            ortho_scale=ortho_scale,
+            filter_mode='linear'
+            )
+
+        self.render.load_mesh(mesh)
+
+        if render_type == "normal":
+            normals, mask = self.render.render_normal(
+                elevation,
+                azimuth,
+                camera_distance=camera_distance,
+                center=None,
+                resolution=render_size,
+                bg_color=[0, 0, 0],
+                use_abs_coor=False,
+                pan_x=pan_x,
+                pan_y=pan_y
+            )
+
+            normals = 2.0 * normals - 1.0  # Map [0,1] to [-1,1]
+            normals = normals / (torch.norm(normals, dim=-1, keepdim=True) + 1e-6)
+            # Remap axes for standard normal map convention
+            image = torch.zeros_like(normals)
+            image[..., 0] = normals[..., 0]  # View right to R
+            image[..., 1] = normals[..., 1]  # View up to G
+            image[..., 2] = -normals[..., 2] # View forward (negated) to B
+
+            image = (image + 1) * 0.5
+
+            #mask = mask.cpu().float()
+            masked_image = image * mask
+
+            bg_color = torch.tensor(bg_color, dtype=torch.float32, device=image.device)
+            bg = bg_color.view(1, 1, 3) * (1.0 - mask)
+            final_image = masked_image + bg
+        elif render_type == "depth":
+            depth = self.render.render_depth(
+                elevation,
+                azimuth,
+                camera_distance=camera_distance,
+                center=None,
+                resolution=render_size,
+                pan_x=pan_x,
+                pan_y=pan_y
+            )
+            final_image = depth.unsqueeze(0).repeat(1, 1, 1, 3).cpu().float()
+        
+        return (final_image,)
+    
+    def render_normal_multiview(self, camera_elevs, camera_azims, use_abs_coor=True):
+        normal_maps = []
+        for elev, azim in zip(camera_elevs, camera_azims):
+            normal_map, _ = self.render.render_normal(
                 elev, azim, use_abs_coor=use_abs_coor, return_type='th')
             normal_maps.append(normal_map)
 
@@ -976,7 +1078,8 @@ NODE_CLASS_MAPPINGS = {
     "Hy3DGetMeshPBRTextures": Hy3DGetMeshPBRTextures,
     "Hy3DSetMeshPBRTextures": Hy3DSetMeshPBRTextures,
     "Hy3DSetMeshPBRAttributes": Hy3DSetMeshPBRAttributes,
-    "Hy3DVAEDecode": Hy3DVAEDecode
+    "Hy3DVAEDecode": Hy3DVAEDecode,
+    "Hy3DRenderSingleView": Hy3DRenderSingleView
     }
 NODE_DISPLAY_NAME_MAPPINGS = {
     "Hy3DModelLoader": "Hy3DModelLoader",
@@ -1000,5 +1103,6 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "Hy3DGetMeshPBRTextures": "Hy3D Get Mesh PBR Textures",
     "Hy3DSetMeshPBRTextures": "Hy3D Set Mesh PBR Textures",
     "Hy3DSetMeshPBRAttributes": "Hy3D Set Mesh PBR Attributes",
-    "Hy3DVAEDecode": "Hy3D VAE Decode"
+    "Hy3DVAEDecode": "Hy3D VAE Decode",
+    "Hy3DRenderSingleView": "Hy3D Render SingleView"
     }

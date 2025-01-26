@@ -44,13 +44,14 @@ def transform_pos(mtx, pos, keepdim=False):
         return torch.matmul(posw, t_mtx.t())[None, ...]
 
 
-def get_mv_matrix(elev, azim, camera_distance, center=None):
+def get_mv_matrix(elev, azim, camera_distance, center=None, pan_x=0.0, pan_y=0.0):
     elev = -elev
     azim += 90
 
     elev_rad = math.radians(elev)
     azim_rad = math.radians(azim)
 
+    # Calculate base camera position
     camera_position = np.array([camera_distance * math.cos(elev_rad) * math.cos(azim_rad),
                                 camera_distance *
                                 math.cos(elev_rad) * math.sin(azim_rad),
@@ -61,15 +62,22 @@ def get_mv_matrix(elev, azim, camera_distance, center=None):
     else:
         center = np.array(center)
 
+    # Calculate view direction
     lookat = center - camera_position
     lookat = lookat / np.linalg.norm(lookat)
 
+    # Calculate up and right vectors
     up = np.array([0, 0, 1.0])
     right = np.cross(lookat, up)
     right = right / np.linalg.norm(right)
     up = np.cross(right, lookat)
     up = up / np.linalg.norm(up)
 
+    # Apply panning by moving camera position and center
+    pan_offset = (right * pan_x + up * pan_y)
+    camera_position += pan_offset
+
+    # Create camera matrix
     c2w = np.concatenate(
         [np.stack([right, up, -lookat], axis=-1), camera_position[:, None]], axis=-1)
 
