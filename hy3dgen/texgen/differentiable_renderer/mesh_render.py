@@ -133,7 +133,7 @@ class MeshRender():
         camera_distance=1.45, camera_type='orth',
         default_resolution=1024, texture_size=1024,
         use_antialias=True, max_mip_level=None, filter_mode='linear',
-        bake_mode='linear', raster_mode='cr', device='cuda'):
+        bake_mode='linear', raster_mode='cr', device='cuda', ortho_scale=1.2,):
 
         self.device = device
 
@@ -159,7 +159,7 @@ class MeshRender():
             raise f'No raster named {self.raster_mode}'
 
         if camera_type == 'orth':
-            self.ortho_scale = 1.2
+            self.ortho_scale = ortho_scale
             self.camera_proj_mat = get_orthographic_projection_matrix(
                 left=-self.ortho_scale * 0.5, right=self.ortho_scale * 0.5,
                 bottom=-self.ortho_scale * 0.5, top=self.ortho_scale * 0.5,

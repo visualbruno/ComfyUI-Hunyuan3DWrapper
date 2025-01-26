@@ -241,6 +241,7 @@ class Hy3DCameraConfig:
                 "camera_elevations": ("STRING", {"default": "0, 0, 0, 0, 90, -90", "multiline": False}),
                 "view_weights": ("STRING", {"default": "1, 0.1, 0.5, 0.1, 0.05, 0.05", "multiline": False}),
                 "camera_distance": ("FLOAT", {"default": 1.45, "min": 0.1, "max": 10.0, "step": 0.001}),
+                "ortho_scale": ("FLOAT", {"default": 1.2, "min": 0.1, "max": 10.0, "step": 0.001}),
             },
         }
 
@@ -249,7 +250,7 @@ class Hy3DCameraConfig:
     FUNCTION = "process"
     CATEGORY = "Hunyuan3DWrapper"
 
-    def process(self, camera_azimuths, camera_elevations, view_weights, camera_distance):
+    def process(self, camera_azimuths, camera_elevations, view_weights, camera_distance, ortho_scale):
         angles_list = list(map(int, camera_azimuths.replace(" ", "").split(',')))
         elevations_list = list(map(int, camera_elevations.replace(" ", "").split(',')))
         weights_list = list(map(float, view_weights.replace(" ", "").split(',')))
@@ -258,7 +259,8 @@ class Hy3DCameraConfig:
             "selected_camera_azims": angles_list,
             "selected_camera_elevs": elevations_list,
             "selected_view_weights": weights_list,
-            "camera_distance": camera_distance
+            "camera_distance": camera_distance,
+            "ortho_scale": ortho_scale,
             }
         
         return (camera_config,)
@@ -310,15 +312,18 @@ class Hy3DRenderMultiView:
             selected_camera_azims = [0, 90, 180, 270, 0, 180]
             selected_camera_elevs = [0, 0, 0, 0, 90, -90]
             camera_distance = 1.45
+            ortho_scale = 1.2
         else:
             selected_camera_azims = camera_config["selected_camera_azims"]
             selected_camera_elevs = camera_config["selected_camera_elevs"]
             camera_distance = camera_config["camera_distance"]
+            ortho_scale = camera_config["ortho_scale"]
         
         self.render = MeshRender(
             default_resolution=render_size,
             texture_size=texture_size,
-            camera_distance=camera_distance)
+            camera_distance=camera_distance,
+            ortho_scale=ortho_scale)
 
         self.render.load_mesh(mesh)
 
@@ -377,15 +382,18 @@ class Hy3DRenderMultiViewDepth:
             selected_camera_azims = [0, 90, 180, 270, 0, 180]
             selected_camera_elevs = [0, 0, 0, 0, 90, -90]
             camera_distance = 1.45
+            ortho_scale = 1.2
         else:
             selected_camera_azims = camera_config["selected_camera_azims"]
             selected_camera_elevs = camera_config["selected_camera_elevs"]
             camera_distance = camera_config["camera_distance"]
+            ortho_scale = camera_config["ortho_scale"]
 
         self.render = MeshRender(
             default_resolution=render_size,
             texture_size=texture_size,
-            camera_distance=camera_distance)
+            camera_distance=camera_distance,
+            ortho_scale=ortho_scale)
 
         self.render.load_mesh(mesh)
 
