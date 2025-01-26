@@ -77,8 +77,8 @@ class Hy3DModelLoader:
             }
         }
 
-    RETURN_TYPES = ("HY3DMODEL",)
-    RETURN_NAMES = ("pipeline", )
+    RETURN_TYPES = ("HY3DMODEL", "HY3DVAE")
+    RETURN_NAMES = ("pipeline", "vae")
     FUNCTION = "loadmodel"
     CATEGORY = "Hunyuan3DWrapper"
 
@@ -88,7 +88,7 @@ class Hy3DModelLoader:
 
         config_path = os.path.join(script_directory, "configs", "dit_config.yaml")
         model_path = folder_paths.get_full_path("diffusion_models", model)
-        pipe = Hunyuan3DDiTFlowMatchingPipeline.from_single_file(
+        pipe, vae = Hunyuan3DDiTFlowMatchingPipeline.from_single_file(
             ckpt_path=model_path, 
             config_path=config_path, 
             use_safetensors=True, 
@@ -97,7 +97,7 @@ class Hy3DModelLoader:
             compile_args=compile_args,
             attention_mode=attention_mode)
         
-        return (pipe,)
+        return (pipe, vae,)
 
 class DownloadAndLoadHy3DDelightModel:
     @classmethod
@@ -676,7 +676,6 @@ class Hy3DGenerateMesh:
             "required": {
                 "pipeline": ("HY3DMODEL",),
                 "image": ("IMAGE", ),
-                "octree_resolution": ("INT", {"default": 256, "min": 64, "max": 4096, "step": 16}),
                 "guidance_scale": ("FLOAT", {"default": 5.5, "min": 0.0, "max": 100.0, "step": 0.01}),
                 "steps": ("INT", {"default": 30, "min": 1}),
                 "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
@@ -686,12 +685,12 @@ class Hy3DGenerateMesh:
             }
         }
 
-    RETURN_TYPES = ("HY3DMESH",)
-    RETURN_NAMES = ("mesh",)
+    RETURN_TYPES = ("HY3DLATENT",)
+    RETURN_NAMES = ("latents",)
     FUNCTION = "process"
     CATEGORY = "Hunyuan3DWrapper"
 
-    def process(self, pipeline, image, steps, guidance_scale, octree_resolution, seed, mask=None):
+    def process(self, pipeline, image, steps, guidance_scale, seed, mask=None):
 
         device = mm.get_torch_device()
         offload_device = mm.unet_offload_device()
@@ -709,16 +708,12 @@ class Hy3DGenerateMesh:
         except:
             pass
 
-        mesh = pipeline(
+        latents = pipeline(
             image=image, 
             mask=mask,
             num_inference_steps=steps, 
-            mc_algo='mc',
             guidance_scale=guidance_scale,
-            octree_resolution=octree_resolution,
-            generator=torch.manual_seed(seed))[0]
-        
-        log.info(f"Generated mesh with {mesh.vertices.shape[0]} vertices and {mesh.faces.shape[0]} faces")
+            generator=torch.manual_seed(seed))
 
         print_memory(device)
         try:
@@ -728,7 +723,51 @@ class Hy3DGenerateMesh:
 
         pipeline.to(offload_device)
         
-        return (mesh, )
+        return (latents, )
+    
+class Hy3DVAEDecode:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "vae": ("HY3DVAE",),
+                "latents": ("HY3DLATENT", ),
+                "box_v": ("FLOAT", {"default": 1.01, "min": -10.0, "max": 10.0, "step": 0.001}),
+                "octree_resolution": ("INT", {"default": 384, "min": 64, "max": 4096, "step": 16}),
+                "num_chunks": ("INT", {"default": 8000, "min": 1, "max": 10000000, "step": 1}),
+                "mc_level": ("FLOAT", {"default": 0, "min": -1.0, "max": 1.0, "step": 0.0001}),
+                "mc_algo": (["mc", "dmc"], {"default": "mc"}),
+            },
+        }
+
+    RETURN_TYPES = ("HY3DMESH",)
+    RETURN_NAMES = ("mesh",)
+    FUNCTION = "process"
+    CATEGORY = "Hunyuan3DWrapper"
+
+    def process(self, vae, latents, box_v, octree_resolution, mc_level, num_chunks, mc_algo):
+        device = mm.get_torch_device()
+        offload_device = mm.unet_offload_device()
+
+        vae.to(device)
+        latents = 1. / vae.scale_factor * latents
+        latents = vae(latents)
+        
+        outputs = vae.latents2mesh(
+            latents,
+            bounds=box_v,
+            mc_level=mc_level,
+            num_chunks=num_chunks,
+            octree_resolution=octree_resolution,
+            mc_algo=mc_algo,
+        )[0]
+        vae.to(offload_device)
+
+        outputs.mesh_f = outputs.mesh_f[:, ::-1]
+        mesh_output = trimesh.Trimesh(outputs.mesh_v, outputs.mesh_f)
+        log.info(f"Decoded mesh with {mesh_output.vertices.shape[0]} vertices and {mesh_output.faces.shape[0]} faces")
+        
+        return (mesh_output, )
     
 class Hy3DPostprocessMesh:
     @classmethod
@@ -918,7 +957,8 @@ NODE_CLASS_MAPPINGS = {
     "Hy3DRenderMultiViewDepth": Hy3DRenderMultiViewDepth,
     "Hy3DGetMeshPBRTextures": Hy3DGetMeshPBRTextures,
     "Hy3DSetMeshPBRTextures": Hy3DSetMeshPBRTextures,
-    "Hy3DSetMeshPBRAttributes": Hy3DSetMeshPBRAttributes
+    "Hy3DSetMeshPBRAttributes": Hy3DSetMeshPBRAttributes,
+    "Hy3DVAEDecode": Hy3DVAEDecode
     }
 NODE_DISPLAY_NAME_MAPPINGS = {
     "Hy3DModelLoader": "Hy3DModelLoader",
@@ -941,5 +981,6 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "Hy3DRenderMultiViewDepth": "Hy3D Render MultiView Depth",
     "Hy3DGetMeshPBRTextures": "Hy3D Get Mesh PBR Textures",
     "Hy3DSetMeshPBRTextures": "Hy3D Set Mesh PBR Textures",
-    "Hy3DSetMeshPBRAttributes": "Hy3D Set Mesh PBR Attributes"
+    "Hy3DSetMeshPBRAttributes": "Hy3D Set Mesh PBR Attributes",
+    "Hy3DVAEDecode": "Hy3D VAE Decode"
     }
