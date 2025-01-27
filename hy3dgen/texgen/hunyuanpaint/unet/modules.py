@@ -281,12 +281,27 @@ class UNet2p5DConditionModel(torch.nn.Module):
     def from_pretrained(pretrained_model_name_or_path, **kwargs):
         torch_dtype = kwargs.pop('torch_dtype', torch.float32)
         config_path = os.path.join(pretrained_model_name_or_path, 'config.json')
-        unet_ckpt_path = os.path.join(pretrained_model_name_or_path, 'diffusion_pytorch_model.bin')
+        unet_ckpt_path_safetensors = os.path.join(pretrained_model_name_or_path, 'diffusion_pytorch_model.safetensors')
+        unet_ckpt_path_bin = os.path.join(pretrained_model_name_or_path, 'diffusion_pytorch_model.bin')
+
+        if not os.path.exists(config_path):
+            raise FileNotFoundError(f"Config not found at {config_path}")
+
         with open(config_path, 'r', encoding='utf-8') as file:
             config = json.load(file)
+
         unet = UNet2DConditionModel(**config)
         unet = UNet2p5DConditionModel(unet)
-        unet_ckpt = torch.load(unet_ckpt_path, map_location='cpu', weights_only=True)
+
+        # Try loading safetensors first, fall back to .bin
+        if os.path.exists(unet_ckpt_path_safetensors):
+            import safetensors.torch
+            unet_ckpt = safetensors.torch.load_file(unet_ckpt_path_safetensors)
+        elif os.path.exists(unet_ckpt_path_bin):
+            unet_ckpt = torch.load(unet_ckpt_path_bin, map_location='cpu', weights_only=True)
+        else:
+            raise FileNotFoundError(f"No checkpoint found at {unet_ckpt_path_safetensors} or {unet_ckpt_path_bin}")
+
         unet.load_state_dict(unet_ckpt, strict=True)
         unet = unet.to(torch_dtype)
         return unet
