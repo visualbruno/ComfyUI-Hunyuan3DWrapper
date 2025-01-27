@@ -1067,6 +1067,26 @@ class Hy3DPostprocessMesh:
         
         return (new_mesh, )
     
+class Hy3DMeshInfo:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "mesh": ("HY3DMESH",),
+            },
+        }
+
+    RETURN_TYPES = ("INT", "INT", )
+    RETURN_NAMES = ("vertices", "faces",)
+    FUNCTION = "process"
+    CATEGORY = "Hunyuan3DWrapper"
+
+    def process(self, mesh):
+        vertices_count = mesh.vertices.shape[0]
+        faces_count = mesh.faces.shape[0]
+        
+        return (vertices_count, faces_count,)
+    
 class Hy3DIMRemesh:
     @classmethod
     def INPUT_TYPES(s):
@@ -1270,7 +1290,8 @@ NODE_CLASS_MAPPINGS = {
     "Hy3DVAEDecode": Hy3DVAEDecode,
     "Hy3DRenderSingleView": Hy3DRenderSingleView,
     "Hy3DDiffusersSchedulerConfig": Hy3DDiffusersSchedulerConfig,
-    "Hy3DIMRemesh": Hy3DIMRemesh
+    "Hy3DIMRemesh": Hy3DIMRemesh,
+    "Hy3DMeshInfo": Hy3DMeshInfo
     }
 NODE_DISPLAY_NAME_MAPPINGS = {
     "Hy3DModelLoader": "Hy3DModelLoader",
@@ -1297,5 +1318,6 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "Hy3DVAEDecode": "Hy3D VAE Decode",
     "Hy3DRenderSingleView": "Hy3D Render SingleView",
     "Hy3DDiffusersSchedulerConfig": "Hy3D Diffusers Scheduler Config",
-    "Hy3DIMRemesh": "Hy3D Instant-Meshes Remesh"
+    "Hy3DIMRemesh": "Hy3D Instant-Meshes Remesh",
+    "Hy3DMeshInfo": "Hy3D Mesh Info"
     }
