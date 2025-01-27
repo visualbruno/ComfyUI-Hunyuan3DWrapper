@@ -1082,6 +1082,7 @@ class Hy3DMeshInfo:
     CATEGORY = "Hunyuan3DWrapper"
 
     def process(self, mesh):
+        log.info(f"Hy3DMeshInfo: Mesh has {vertices_count} vertices and {mesh.faces.shape[0]} faces")
         vertices_count = mesh.vertices.shape[0]
         faces_count = mesh.faces.shape[0]
         
