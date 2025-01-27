@@ -144,7 +144,7 @@ class DownloadAndLoadHy3DDelightModel:
             },
         }
 
-    RETURN_TYPES = ("DELIGHTMODEL",)
+    RETURN_TYPES = ("HY3DDIFFUSERSPIPE",)
     RETURN_NAMES = ("delight_pipe", )
     FUNCTION = "loadmodel"
     CATEGORY = "Hunyuan3DWrapper"
@@ -184,7 +184,7 @@ class Hy3DDelightImage:
     def INPUT_TYPES(s):
         return {
             "required": {
-                "delight_pipe": ("DELIGHTMODEL",),
+                "delight_pipe": ("HY3DDIFFUSERSPIPE",),
                 "image": ("IMAGE", ),
                 "steps": ("INT", {"default": 50, "min": 1}),
                 "width": ("INT", {"default": 512, "min": 64, "max": 4096, "step": 16}),
@@ -192,6 +192,9 @@ class Hy3DDelightImage:
                 "cfg_image": ("FLOAT", {"default": 1.5, "min": 0.0, "max": 100.0, "step": 0.01}),
                 "cfg_text": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 100.0, "step": 0.01}),
                 "seed": ("INT", {"default": 42, "min": 0, "max": 0xffffffffffffffff}),
+        },
+        "optional": {
+            "scheduler": ("NOISESCHEDULER",),
         }
     }
 
@@ -200,10 +203,18 @@ class Hy3DDelightImage:
     FUNCTION = "process"
     CATEGORY = "Hunyuan3DWrapper"
 
-    def process(self, delight_pipe, image, width, height, cfg_image, cfg_text, steps, seed):
+    def process(self, delight_pipe, image, width, height, cfg_image, cfg_text, steps, seed, scheduler=None):
 
         device = mm.get_torch_device()
         offload_device = mm.unet_offload_device()
+
+        if scheduler is not None:
+            if not hasattr(self, "default_scheduler"):
+                self.default_scheduler = delight_pipe.scheduler
+            delight_pipe.scheduler = scheduler
+        else:
+            if hasattr(self, "default_scheduler"):
+                delight_pipe.scheduler = self.default_scheduler
 
         image = image.permute(0, 3, 1, 2).to(device)
 
@@ -233,7 +244,7 @@ class DownloadAndLoadHy3DPaintModel:
             },
         }
 
-    RETURN_TYPES = ("HY3DPAINTMODEL",)
+    RETURN_TYPES = ("HY3DDIFFUSERSPIPE",)
     RETURN_NAMES = ("multiview_pipe", )
     FUNCTION = "loadmodel"
     CATEGORY = "Hunyuan3DWrapper"
@@ -586,13 +597,63 @@ class Hy3DRenderMultiViewDepth:
             depth_maps.append(depth_map)
 
         return depth_maps
+
+class Hy3DDiffusersSchedulerConfig:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "pipeline": ("HY3DDIFFUSERSPIPE",),
+                "scheduler": (available_schedulers,
+                    {
+                        "default": 'Euler A'
+                    }),
+                "sigmas": (["default", "karras", "exponential", "beta"],),
+            },
+        }
+
+    RETURN_TYPES = ("NOISESCHEDULER",)
+    RETURN_NAMES = ("diffusers_scheduler",)
+    FUNCTION = "process"
+    CATEGORY = "Hunyuan3DWrapper"
+
+    def process(self, pipeline, scheduler, sigmas):
+
+        scheduler_config = dict(pipeline.scheduler.config)
+        
+        if scheduler in scheduler_mapping:
+            if scheduler == "DPM++SDE":
+                scheduler_config["algorithm_type"] = "sde-dpmsolver++"
+            else:
+                scheduler_config.pop("algorithm_type", None)
+            if sigmas == "default":
+                scheduler_config["use_karras_sigmas"] = False
+                scheduler_config["use_exponential_sigmas"] = False
+                scheduler_config["use_beta_sigmas"] = False
+            elif sigmas == "karras":
+                scheduler_config["use_karras_sigmas"] = True
+                scheduler_config["use_exponential_sigmas"] = False
+                scheduler_config["use_beta_sigmas"] = False
+            elif sigmas == "exponential":
+                scheduler_config["use_karras_sigmas"] = False
+                scheduler_config["use_exponential_sigmas"] = True
+                scheduler_config["use_beta_sigmas"] = False
+            elif sigmas == "beta":
+                scheduler_config["use_karras_sigmas"] = False
+                scheduler_config["use_exponential_sigmas"] = False
+                scheduler_config["use_beta_sigmas"] = True
+            noise_scheduler = scheduler_mapping[scheduler].from_config(scheduler_config)
+        else:
+            raise ValueError(f"Unknown scheduler: {scheduler}")
+        
+        return (noise_scheduler,)
     
 class Hy3DSampleMultiView:
     @classmethod
     def INPUT_TYPES(s):
         return {
             "required": {
-                "pipeline": ("HY3DPAINTMODEL",),
+                "pipeline": ("HY3DDIFFUSERSPIPE",),
                 "ref_image": ("IMAGE", ),
                 "normal_maps": ("IMAGE", ),
                 "position_maps": ("IMAGE", ),
@@ -602,10 +663,7 @@ class Hy3DSampleMultiView:
             },
             "optional": {
                 "camera_config": ("HY3DCAMERA",),
-                "scheduler": (available_schedulers,
-                    {
-                        "default": 'Euler A'
-                    }),
+                "scheduler": ("NOISESCHEDULER",),
             }
         }
 
@@ -614,7 +672,7 @@ class Hy3DSampleMultiView:
     FUNCTION = "process"
     CATEGORY = "Hunyuan3DWrapper"
 
-    def process(self, pipeline, ref_image, normal_maps, position_maps, view_size, seed, steps, camera_config=None, scheduler="Euler A"):
+    def process(self, pipeline, ref_image, normal_maps, position_maps, view_size, seed, steps, camera_config=None, scheduler=None):
         device = mm.get_torch_device()
         mm.soft_empty_cache()
         torch.manual_seed(seed)
@@ -655,17 +713,13 @@ class Hy3DSampleMultiView:
 
         callback = ComfyProgressCallback(total_steps=steps)
 
-        scheduler_config = dict(pipeline.scheduler.config)
-        
-        if scheduler in scheduler_mapping:
-            if scheduler == "DPM++SDE":
-                scheduler_config["algorithm_type"] = "sde-dpmsolver++"
-            else:
-                scheduler_config.pop("algorithm_type", None)
-            noise_scheduler = scheduler_mapping[scheduler].from_config(scheduler_config)
-            pipeline.scheduler = noise_scheduler
+        if scheduler is not None:
+            if not hasattr(self, "default_scheduler"):
+                self.default_scheduler = pipeline.scheduler
+            pipeline.scheduler = scheduler
         else:
-            raise ValueError(f"Unknown scheduler: {scheduler}")
+            if hasattr(self, "default_scheduler"):
+                pipeline.scheduler = self.default_scheduler
 
         multiview_images = pipeline(
             input_image,
@@ -1166,7 +1220,8 @@ NODE_CLASS_MAPPINGS = {
     "Hy3DSetMeshPBRTextures": Hy3DSetMeshPBRTextures,
     "Hy3DSetMeshPBRAttributes": Hy3DSetMeshPBRAttributes,
     "Hy3DVAEDecode": Hy3DVAEDecode,
-    "Hy3DRenderSingleView": Hy3DRenderSingleView
+    "Hy3DRenderSingleView": Hy3DRenderSingleView,
+    "Hy3DDiffusersSchedulerConfig": Hy3DDiffusersSchedulerConfig
     }
 NODE_DISPLAY_NAME_MAPPINGS = {
     "Hy3DModelLoader": "Hy3DModelLoader",
@@ -1191,5 +1246,6 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "Hy3DSetMeshPBRTextures": "Hy3D Set Mesh PBR Textures",
     "Hy3DSetMeshPBRAttributes": "Hy3D Set Mesh PBR Attributes",
     "Hy3DVAEDecode": "Hy3D VAE Decode",
-    "Hy3DRenderSingleView": "Hy3D Render SingleView"
+    "Hy3DRenderSingleView": "Hy3D Render SingleView",
+    "Hy3DDiffusersSchedulerConfig": "Hy3D Diffusers Scheduler Config"
     }
