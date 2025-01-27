@@ -930,6 +930,7 @@ class Hy3DLoadMesh:
         
         return (mesh,)
 
+
 class Hy3DGenerateMesh:
     @classmethod
     def INPUT_TYPES(s):
@@ -1063,6 +1064,53 @@ class Hy3DPostprocessMesh:
         if smooth_normals:              
             new_mesh.vertex_normals = trimesh.smoothing.get_vertices_normals(new_mesh)
 
+        
+        return (new_mesh, )
+    
+class Hy3DIMRemesh:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "mesh": ("HY3DMESH",),
+                "merge_vertices": ("BOOLEAN", {"default": True}),
+                "vertex_count": ("INT", {"default": 10000, "min": 100, "max": 10000000, "step": 1}),
+                "smooth_iter": ("INT", {"default": 8, "min": 0, "max": 100, "step": 1}),
+                "align_to_boundaries": ("BOOLEAN", {"default": True}),
+                "triangulate_result": ("BOOLEAN", {"default": True}),
+            },
+        }
+
+    RETURN_TYPES = ("HY3DMESH",)
+    RETURN_NAMES = ("mesh",)
+    FUNCTION = "remesh"
+    CATEGORY = "Hunyuan3DWrapper"
+    DESCRIPTION = "Remeshes the mesh using instant-meshes: https://github.com/wjakob/instant-meshes, Note: this will remove all vertex colors and textures."
+
+    def remesh(self, mesh, merge_vertices, vertex_count, smooth_iter, align_to_boundaries, triangulate_result):
+        try:
+            import pynanoinstantmeshes as PyNIM
+        except ImportError:
+            raise ImportError("pynanoinstantmeshes not found. Please install it using 'pip install pynanoinstantmeshes'")
+        new_mesh = mesh.copy()
+        if merge_vertices:
+            mesh.merge_vertices(new_mesh)
+
+        new_verts, new_faces = PyNIM.remesh(
+            np.array(mesh.vertices, dtype=np.float32),
+            np.array(mesh.faces, dtype=np.uint32),
+            vertex_count,
+            align_to_boundaries=align_to_boundaries,
+            smooth_iter=smooth_iter
+        )
+        if new_verts.shape[0] - 1 != new_faces.max():
+            # Skip test as the meshing failed
+            raise ValueError("Instant-meshes failed to remesh the mesh")
+        new_verts = new_verts.astype(np.float32)
+        if triangulate_result:
+            new_faces = trimesh.geometry.triangulate_quads(new_faces)
+
+        new_mesh = trimesh.Trimesh(new_verts, new_faces)
         
         return (new_mesh, )
     
@@ -1221,7 +1269,8 @@ NODE_CLASS_MAPPINGS = {
     "Hy3DSetMeshPBRAttributes": Hy3DSetMeshPBRAttributes,
     "Hy3DVAEDecode": Hy3DVAEDecode,
     "Hy3DRenderSingleView": Hy3DRenderSingleView,
-    "Hy3DDiffusersSchedulerConfig": Hy3DDiffusersSchedulerConfig
+    "Hy3DDiffusersSchedulerConfig": Hy3DDiffusersSchedulerConfig,
+    "Hy3DIMRemesh": Hy3DIMRemesh
     }
 NODE_DISPLAY_NAME_MAPPINGS = {
     "Hy3DModelLoader": "Hy3DModelLoader",
@@ -1247,5 +1296,6 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "Hy3DSetMeshPBRAttributes": "Hy3D Set Mesh PBR Attributes",
     "Hy3DVAEDecode": "Hy3D VAE Decode",
     "Hy3DRenderSingleView": "Hy3D Render SingleView",
-    "Hy3DDiffusersSchedulerConfig": "Hy3D Diffusers Scheduler Config"
+    "Hy3DDiffusersSchedulerConfig": "Hy3D Diffusers Scheduler Config",
+    "Hy3DIMRemesh": "Hy3D Instant-Meshes Remesh"
     }
