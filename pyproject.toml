@@ -1,0 +1,15 @@
+[project]
+name = "comfyui-videonoisewarp"
+description = "Wrapper nodes for https://github.com/Tencent/Hunyuan3D-2, additional installation steps needed, please check the github repository"
+version = "1.0.0"
+license = {file = "LICENSE"}
+dependencies = ["trimesh", "diffusers>=0.31.0","accelerate","huggingface_hub","einops","opencv-python","transformers","xatlas","pymeshlab","pygltflib","scikit-learn","scikit-image","pybind11"]
+
+[project.urls]
+Repository = "https://github.com/kijai/ComfyUI-Hunyuan3DWrapper"
+#  Used by Comfy Registry https://comfyregistry.org
+
+[tool.comfy]
+PublisherId = "kijai"
+DisplayName = "ComfyUI-ComfyUI-Hunyuan3DWrapper"
+Icon = ""
