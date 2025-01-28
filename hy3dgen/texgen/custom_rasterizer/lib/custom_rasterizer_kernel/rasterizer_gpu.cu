@@ -18,7 +18,7 @@ __device__ void rasterizeTriangleGPU(int idx, float* vt0, float* vt1, float* vt2
             if (isBarycentricCoordInBounds(baryCentricCoordinate)) {
                 int pixel = py * width + px;
                 if (zbuffer == 0) {
-                    atomicExch(&zbuffer[pixel], (INT64)(idx + 1));
+                    atomicExch((unsigned long long*)&zbuffer[pixel],(unsigned long long)(idx + 1));
                     continue;
                 }
                 float depth = baryCentricCoordinate[0] * vt0[2] + baryCentricCoordinate[1] * vt1[2] + baryCentricCoordinate[2] * vt2[2];
@@ -31,7 +31,7 @@ __device__ void rasterizeTriangleGPU(int idx, float* vt0, float* vt1, float* vt2
                 INT64 token = (INT64)z_quantize * MAXINT + (INT64)(idx + 1);
                 if (depth < depth_thres)
                     continue;
-                atomicMin(&zbuffer[pixel], token);
+                atomicMin((unsigned long long*)&zbuffer[pixel],(unsigned long long)token);
             }
         }
     }
