@@ -378,6 +378,7 @@ class Hy3DRenderMultiView:
             },
             "optional": {
                 "camera_config": ("HY3DCAMERA",),
+                "normal_space": (["world", "tangent"], {"default": "world"}),
             }
         }
 
@@ -386,7 +387,7 @@ class Hy3DRenderMultiView:
     FUNCTION = "process"
     CATEGORY = "Hunyuan3DWrapper"
 
-    def process(self, mesh, render_size, texture_size, camera_config=None):
+    def process(self, mesh, render_size, texture_size, camera_config=None, normal_space="world"):
 
         from .hy3dgen.texgen.differentiable_renderer.mesh_render import MeshRender
 
@@ -409,9 +410,22 @@ class Hy3DRenderMultiView:
 
         self.render.load_mesh(mesh)
 
-        normal_maps = self.render_normal_multiview(
-            selected_camera_elevs, selected_camera_azims, use_abs_coor=True)
-        normal_tensors = torch.stack(normal_maps, dim=0)
+        if normal_space == "world":
+            normal_maps = self.render_normal_multiview(
+                selected_camera_elevs, selected_camera_azims, use_abs_coor=True)
+            normal_tensors = torch.stack(normal_maps, dim=0)
+        elif normal_space == "tangent":
+            normal_maps = self.render_normal_multiview(
+                selected_camera_elevs, selected_camera_azims, bg_color=[0, 0, 0], use_abs_coor=False)
+            normal_tensors = torch.stack(normal_maps, dim=0)
+            normal_tensors = 2.0 * normal_tensors - 1.0  # Map [0,1] to [-1,1]
+            normal_tensors = normal_tensors / (torch.norm(normal_tensors, dim=-1, keepdim=True) + 1e-6)
+            # Remap axes for standard normal map convention
+            image = torch.zeros_like(normal_tensors)
+            image[..., 0] = normal_tensors[..., 0]  # View right to R
+            image[..., 1] = normal_tensors[..., 1]  # View up to G
+            image[..., 2] = -normal_tensors[..., 2] # View forward (negated) to B
+            normal_tensors = (image + 1) * 0.5
         
         position_maps = self.render_position_multiview(
             selected_camera_elevs, selected_camera_azims)
@@ -419,11 +433,11 @@ class Hy3DRenderMultiView:
         
         return (normal_tensors, position_tensors, self.render,)
     
-    def render_normal_multiview(self, camera_elevs, camera_azims, use_abs_coor=True):
+    def render_normal_multiview(self, camera_elevs, camera_azims, use_abs_coor=True, bg_color=[1, 1, 1]):
         normal_maps = []
         for elev, azim in zip(camera_elevs, camera_azims):
             normal_map, _ = self.render.render_normal(
-                elev, azim, use_abs_coor=use_abs_coor, return_type='th')
+                elev, azim, bg_color=bg_color, use_abs_coor=use_abs_coor, return_type='th')
             normal_maps.append(normal_map)
 
         return normal_maps
