@@ -262,6 +262,7 @@ class DownloadAndLoadHy3DPaintModel:
             snapshot_download(
                 repo_id="tencent/Hunyuan3D-2",
                 allow_patterns=[f"*{model}*"],
+                ignore_patterns=["*diffusion_pytorch_model.bin"],
                 local_dir=download_path,
                 local_dir_use_symlinks=False,
             )
