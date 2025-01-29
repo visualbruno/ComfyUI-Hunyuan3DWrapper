@@ -1080,6 +1080,51 @@ class Hy3DPostprocessMesh:
 
         
         return (new_mesh, )
+
+class Hy3DFastSimplifyMesh:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "mesh": ("HY3DMESH",),
+                "target_count": ("INT", {"default": 40000, "min": 1, "max": 100000000, "step": 1, "tooltip": "Target number of triangles"}),
+                "aggressiveness": ("INT", {"default": 7, "min": 0, "max": 100, "step": 1, "tooltip": "Parameter controlling the growth rate of the threshold at each iteration when lossless is False."}),
+                "max_iterations": ("INT", {"default": 100, "min": 1, "max": 1000, "step": 1, "tooltip": "Maximal number of iterations"}),
+                "update_rate": ("INT", {"default": 5, "min": 1, "max": 1000, "step": 1, "tooltip": "Number of iterations between each update"}),
+                "preserve_border": ("BOOLEAN", {"default": True, "tooltip": "Flag for preserving the vertices situated on open borders."}),
+                "lossless": ("BOOLEAN", {"default": False, "tooltip": "Flag for using the lossless simplification method. Sets the update rate to 1"}),
+                "threshold_lossless": ("FLOAT", {"default": 1e-3, "min": 0.0, "max": 1.0, "step": 0.0001, "tooltip": "Threshold for the lossless simplification method."}),
+            },
+        }
+
+    RETURN_TYPES = ("HY3DMESH",)
+    RETURN_NAMES = ("mesh",)
+    FUNCTION = "process"
+    CATEGORY = "Hunyuan3DWrapper"
+    DESCRIPTION = "Simplifies the mesh using Fast Quadric Mesh Reduction: https://github.com/Kramer84/pyfqmr-Fast-Quadric-Mesh-Reduction"
+
+    def process(self, mesh, target_count, aggressiveness, preserve_border, max_iterations,lossless, threshold_lossless, update_rate):
+        new_mesh = mesh.copy()
+        try:
+            import pyfqmr
+        except ImportError:
+            raise ImportError("pyfqmr not found. Please install it using 'pip install pyfqmr' https://github.com/Kramer84/pyfqmr-Fast-Quadric-Mesh-Reduction")
+        
+        mesh_simplifier = pyfqmr.Simplify()
+        mesh_simplifier.setMesh(mesh.vertices, mesh.faces)
+        mesh_simplifier.simplify_mesh(
+            target_count=target_count, 
+            aggressiveness=aggressiveness,
+            update_rate=update_rate,
+            max_iterations=max_iterations,
+            preserve_border=preserve_border, 
+            verbose=True,
+            lossless=lossless
+            )
+        new_mesh.vertices, new_mesh.faces, _ = mesh_simplifier.getMesh()
+        log.info(f"Simplified mesh to {target_count} vertices, resulting in {new_mesh.vertices.shape[0]} vertices and {new_mesh.faces.shape[0]} faces")   
+        
+        return (new_mesh, )
     
 class Hy3DMeshInfo:
     @classmethod
@@ -1090,17 +1135,19 @@ class Hy3DMeshInfo:
             },
         }
 
-    RETURN_TYPES = ("INT", "INT", )
-    RETURN_NAMES = ("vertices", "faces",)
+    RETURN_TYPES = ("HY3DMESH", "INT", "INT", )
+    RETURN_NAMES = ("mesh", "vertices", "faces",)
     FUNCTION = "process"
     CATEGORY = "Hunyuan3DWrapper"
 
     def process(self, mesh):
-        log.info(f"Hy3DMeshInfo: Mesh has {vertices_count} vertices and {mesh.faces.shape[0]} faces")
         vertices_count = mesh.vertices.shape[0]
         faces_count = mesh.faces.shape[0]
-        
-        return (vertices_count, faces_count,)
+        log.info(f"Hy3DMeshInfo: Mesh has {vertices_count} vertices and {mesh.faces.shape[0]} faces")
+        return {"ui": {
+            "text": [f"{vertices_count:,.0f}x{faces_count:,.0f}"]}, 
+            "result": (mesh, vertices_count, faces_count) 
+        }
     
 class Hy3DIMRemesh:
     @classmethod
@@ -1306,7 +1353,8 @@ NODE_CLASS_MAPPINGS = {
     "Hy3DRenderSingleView": Hy3DRenderSingleView,
     "Hy3DDiffusersSchedulerConfig": Hy3DDiffusersSchedulerConfig,
     "Hy3DIMRemesh": Hy3DIMRemesh,
-    "Hy3DMeshInfo": Hy3DMeshInfo
+    "Hy3DMeshInfo": Hy3DMeshInfo,
+    "Hy3DFastSimplifyMesh": Hy3DFastSimplifyMesh
     }
 NODE_DISPLAY_NAME_MAPPINGS = {
     "Hy3DModelLoader": "Hy3DModelLoader",
@@ -1334,5 +1382,6 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "Hy3DRenderSingleView": "Hy3D Render SingleView",
     "Hy3DDiffusersSchedulerConfig": "Hy3D Diffusers Scheduler Config",
     "Hy3DIMRemesh": "Hy3D Instant-Meshes Remesh",
-    "Hy3DMeshInfo": "Hy3D Mesh Info"
+    "Hy3DMeshInfo": "Hy3D Mesh Info",
+    "Hy3DFastSimplifyMesh": "Hy3D Fast Simplify Mesh"
     }
