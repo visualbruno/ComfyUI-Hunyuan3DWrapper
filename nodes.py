@@ -576,6 +576,9 @@ class Hy3DRenderMultiViewDepth:
 
     def process(self, mesh, render_size, texture_size, camera_config=None):
 
+        mm.unload_all_models()
+        mm.soft_empty_cache()
+
         from .hy3dgen.texgen.differentiable_renderer.mesh_render import MeshRender
 
         if camera_config is None:
@@ -969,6 +972,9 @@ class Hy3DGenerateMesh:
     CATEGORY = "Hunyuan3DWrapper"
 
     def process(self, pipeline, image, steps, guidance_scale, seed, mask=None):
+
+        mm.unload_all_models()
+        mm.soft_empty_cache()
 
         device = mm.get_torch_device()
         offload_device = mm.unet_offload_device()
