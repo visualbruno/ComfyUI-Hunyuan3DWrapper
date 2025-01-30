@@ -6,6 +6,7 @@ from pathlib import Path
 import numpy as np
 import json
 import trimesh
+from tqdm import tqdm
 
 from .hy3dgen.shapegen import Hunyuan3DDiTFlowMatchingPipeline, FaceReducer, FloaterRemover, DegenerateFaceRemover
 from .hy3dgen.texgen.hunyuanpaint.unet.modules import UNet2DConditionModel, UNet2p5DConditionModel
@@ -1120,7 +1121,8 @@ class Hy3DFastSimplifyMesh:
             max_iterations=max_iterations,
             preserve_border=preserve_border, 
             verbose=True,
-            lossless=lossless
+            lossless=lossless,
+            threshold_lossless=threshold_lossless
             )
         new_mesh.vertices, new_mesh.faces, _ = mesh_simplifier.getMesh()
         log.info(f"Simplified mesh to {target_count} vertices, resulting in {new_mesh.vertices.shape[0]} vertices and {new_mesh.faces.shape[0]} faces")   
@@ -1327,6 +1329,150 @@ class Hy3DExportMesh:
         relative_path = Path(subfolder) / f'{filename}_{counter:05}_.glb'
         
         return (str(relative_path), )
+    
+class Hy3DNvdiffrastRenderer:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "mesh": ("HY3DMESH",),
+                "render_type": (["textured", "vertex_colors", "normals","depth",],),
+                "width": ("INT", {"default": 512, "min": 64, "max": 4096, "step": 16, "tooltip": "Width of the rendered image"}),
+                "height": ("INT", {"default": 512, "min": 64, "max": 4096, "step": 16, "tooltip": "Height of the rendered image"}),
+                "ssaa": ("INT", {"default": 1, "min": 1, "max": 8, "step": 1, "tooltip": "Super-sampling anti-aliasing"}),
+                "num_frames": ("INT", {"default": 30, "min": 1, "max": 1000, "step": 1, "tooltip": "Number of frames to render"}),
+                "camera_distance": ("FLOAT", {"default": 2.0, "min": -100.1, "max": 1000.0, "step": 0.01, "tooltip": "Camera distance from the object"}),
+                "yaw": ("FLOAT", {"default": 0.0, "min": -90.0, "max": 90.0, "step": 0.01, "tooltip": "Start yaw in radians"}),
+                "pitch": ("FLOAT", {"default": 0.0, "min": -180.0, "max": 180.0, "step": 0.01, "tooltip": "Start pitch in radians"}),
+                "fov": ("FLOAT", {"default": 60.0, "min": 1.0, "max": 179.0, "step": 0.01, "tooltip": "Camera field of view in degrees"}),
+                "near": ("FLOAT", {"default": 0.1, "min": 0.001, "max": 1000.0, "step": 0.01, "tooltip": "Camera near clipping plane"}),
+                "far": ("FLOAT", {"default": 1000.0, "min": 1.0, "max": 10000.0, "step": 0.01, "tooltip": "Camera far clipping plane"}),
+            },
+        }
+
+    RETURN_TYPES = ("IMAGE", "MASK",)
+    RETURN_NAMES = ("image", "mask")
+    FUNCTION = "render"
+    CATEGORY = "Hunyuan3DWrapper"
+
+    def render(self, mesh, width, height, camera_distance, yaw, pitch, fov, near, far, num_frames, ssaa, render_type):
+        try:
+            import nvdiffrast.torch as dr
+        except ImportError:
+            raise ImportError("nvdiffrast not found. Please install it https://github.com/NVlabs/nvdiffrast")
+        try:
+            from .utils import rotate_mesh_matrix, yaw_pitch_r_fov_to_extrinsics_intrinsics, intrinsics_to_projection
+        except ImportError:
+            raise ImportError("utils3d not found. Please install it 'pip install git+https://github.com/EasternJournalist/utils3d.git#egg=utils3d'")
+        # Create GL context
+        device = mm.get_torch_device()
+        glctx = dr.RasterizeCudaContext()
+        mesh_copy = mesh.copy()
+        mesh_copy = rotate_mesh_matrix(mesh_copy, 90, 'x')
+        mesh_copy = rotate_mesh_matrix(mesh_copy, 180, 'z')
+
+        width, height = width * ssaa, height * ssaa
+
+        # Get UV coordinates and texture if available
+        if hasattr(mesh_copy.visual, 'uv') and hasattr(mesh_copy.visual, 'material'):
+            uvs = torch.tensor(mesh_copy.visual.uv, dtype=torch.float32, device=device).contiguous()
+            
+            # Get texture from material
+            if hasattr(mesh_copy.visual.material, 'baseColorTexture'):
+                pil_texture = getattr(mesh_copy.visual.material, "baseColorTexture")
+                pil_texture = pil_texture.transpose(Image.FLIP_TOP_BOTTOM)
+
+                # Convert PIL to tensor [B,C,H,W]
+                transform = transforms.Compose([
+                    transforms.ToTensor(),
+                ])
+                texture = transform(pil_texture).to(device)
+                texture = texture.unsqueeze(0).permute(0, 2, 3, 1).contiguous() #need to be contiguous for nvdiffrast
+        else:
+            print("No texture found")
+            # Fallback to vertex colors if no texture
+            uvs = None
+            texture = None
+        
+        # Get vertices and faces from trimesh
+        vertices = torch.tensor(mesh_copy.vertices, dtype=torch.float32, device=device).unsqueeze(0)
+        faces = torch.tensor(mesh_copy.faces, dtype=torch.int32, device=device)
+        
+        yaws = torch.linspace(yaw, yaw + torch.pi * 2, num_frames) 
+        pitches = [pitch] * num_frames
+        yaws = yaws.tolist()
+
+        r = camera_distance
+        extrinsics, intrinsics = yaw_pitch_r_fov_to_extrinsics_intrinsics(yaws, pitches,  r, fov)
+        
+        image_list = []
+        mask_list = []
+        pbar = ProgressBar(num_frames)
+        for j, (extr, intr) in tqdm(enumerate(zip(extrinsics, intrinsics)), desc='Rendering', disable=False):
+            
+            perspective = intrinsics_to_projection(intr, near, far)
+            RT = extr.unsqueeze(0)
+            full_proj = (perspective @ extr).unsqueeze(0)
+            
+            # Transform vertices to clip space
+            vertices_homo = torch.cat([vertices, torch.ones_like(vertices[..., :1])], dim=-1)
+            vertices_camera = torch.bmm(vertices_homo, RT.transpose(-1, -2))
+            vertices_clip = torch.bmm(vertices_homo, full_proj.transpose(-1, -2))
+            
+            # Rasterize with proper shape [batch=1, num_vertices, 4]
+            rast_out, _ = dr.rasterize(glctx, vertices_clip, faces, (height, width))
+            
+            if render_type == "textured":
+                if uvs is not None and texture is not None:
+                    # Interpolate UV coordinates
+                    uv_attr, _= dr.interpolate(uvs.unsqueeze(0), rast_out, faces)
+                    
+                    # Sample texture using interpolated UVs
+                    image = dr.texture(tex=texture, uv=uv_attr)
+                    image = dr.antialias(image, rast_out, vertices_clip, faces)
+                else:
+                    raise Exception("No texture found")
+            elif render_type == "vertex_colors":
+                # Fallback to vertex color rendering
+                vertex_colors = (vertices - vertices.min()) / (vertices.max() - vertices.min())
+                image = dr.interpolate(vertex_colors, rast_out, faces)[0]
+            elif render_type == "depth":
+                depth_values = vertices_camera[..., 2:3].contiguous()
+                depth_values = (depth_values - depth_values.min()) / (depth_values.max() - depth_values.min())
+                depth_values = 1 - depth_values
+                image = dr.interpolate(depth_values, rast_out, faces)[0]
+                image = dr.antialias(image, rast_out, vertices_clip, faces)
+            elif "normals" in render_type:
+                normals_tensor = torch.tensor(mesh_copy.vertex_normals, dtype=torch.float32, device=device).contiguous()
+                faces_tensor = torch.tensor(mesh_copy.faces, dtype=torch.int32, device=device).contiguous()
+                normal_image_tensors = dr.interpolate(normals_tensor, rast_out, faces_tensor)[0]
+                normal_image_tensors = dr.antialias(normal_image_tensors, rast_out, vertices_clip, faces)
+                normal_image_tensors = torch.nn.functional.normalize(normal_image_tensors, dim=-1)
+                image = (normal_image_tensors + 1) * 0.5
+
+            # Create background color
+            background_color = torch.zeros((1, height, width, 3), device=device)
+            
+            # Get alpha mask from rasterization
+            mask = rast_out[..., -1:]
+            mask = (mask > 0).float()
+            
+            # Blend rendered image with background
+            image = image * mask + background_color * (1 - mask)
+
+            image_list.append(image)
+            mask_list.append(mask)
+            
+            pbar.update(1)
+        import torch.nn.functional as F
+        image_out = torch.cat(image_list, dim=0)
+        if ssaa > 1:
+            image_out = F.interpolate(image_out.permute(0, 3, 1, 2), (width, height), mode='bilinear', align_corners=False, antialias=True)
+            image_out = image_out.permute(0, 2, 3, 1)
+        mask_out = torch.cat(mask_list, dim=0).squeeze(-1)
+     
+        
+        return (image_out.cpu().float(), mask_out.cpu().float(),)
 
 NODE_CLASS_MAPPINGS = {
     "Hy3DModelLoader": Hy3DModelLoader,
@@ -1355,7 +1501,8 @@ NODE_CLASS_MAPPINGS = {
     "Hy3DDiffusersSchedulerConfig": Hy3DDiffusersSchedulerConfig,
     "Hy3DIMRemesh": Hy3DIMRemesh,
     "Hy3DMeshInfo": Hy3DMeshInfo,
-    "Hy3DFastSimplifyMesh": Hy3DFastSimplifyMesh
+    "Hy3DFastSimplifyMesh": Hy3DFastSimplifyMesh,
+    "Hy3DNvdiffrastRenderer": Hy3DNvdiffrastRenderer
     }
 NODE_DISPLAY_NAME_MAPPINGS = {
     "Hy3DModelLoader": "Hy3DModelLoader",
@@ -1384,5 +1531,6 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "Hy3DDiffusersSchedulerConfig": "Hy3D Diffusers Scheduler Config",
     "Hy3DIMRemesh": "Hy3D Instant-Meshes Remesh",
     "Hy3DMeshInfo": "Hy3D Mesh Info",
-    "Hy3DFastSimplifyMesh": "Hy3D Fast Simplify Mesh"
+    "Hy3DFastSimplifyMesh": "Hy3D Fast Simplify Mesh",
+    "Hy3DNvdiffrastRenderer": "Hy3D Nvdiffrast Renderer"
     }

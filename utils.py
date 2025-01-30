@@ -2,6 +2,7 @@ import importlib.metadata
 import torch
 import logging
 import numpy as np
+import trimesh
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 log = logging.getLogger(__name__)
 
@@ -23,3 +24,72 @@ def print_memory(device):
     log.info(f"Max reserved memory: {max_reserved=:.3f} GB")
     #memory_summary = torch.cuda.memory_summary(device=device, abbreviated=False)
     #log.info(f"Memory Summary:\n{memory_summary}")
+
+def rotate_mesh_matrix(mesh, angle, axis='z'):
+    # Create rotation matrix
+    matrix = trimesh.transformations.rotation_matrix(
+        angle=np.radians(angle),  # Convert degrees to radians
+        direction={
+            'x': [1, 0, 0],
+            'y': [0, 1, 0],
+            'z': [0, 0, 1]
+        }[axis]
+    )
+    return mesh.apply_transform(matrix)
+        
+def intrinsics_to_projection(
+        intrinsics: torch.Tensor,
+        near: float,
+        far: float,
+    ) -> torch.Tensor:
+    """
+    OpenCV intrinsics to OpenGL perspective matrix
+
+    Args:
+        intrinsics (torch.Tensor): [3, 3] OpenCV intrinsics matrix
+        near (float): near plane to clip
+        far (float): far plane to clip
+    Returns:
+        (torch.Tensor): [4, 4] OpenGL perspective matrix
+    """
+    fx, fy = intrinsics[0, 0], intrinsics[1, 1]
+    cx, cy = intrinsics[0, 2], intrinsics[1, 2]
+    ret = torch.zeros((4, 4), dtype=intrinsics.dtype, device=intrinsics.device)
+    ret[0, 0] = 2 * fx
+    ret[1, 1] = 2 * fy
+    ret[0, 2] = 2 * cx - 1
+    ret[1, 2] = - 2 * cy + 1
+    ret[2, 2] = far / (far - near)
+    ret[2, 3] = near * far / (near - far)
+    ret[3, 2] = 1.
+    return ret
+
+def yaw_pitch_r_fov_to_extrinsics_intrinsics(yaws, pitchs, rs, fovs):
+    import utils3d
+    is_list = isinstance(yaws, list)
+    if not is_list:
+        yaws = [yaws]
+        pitchs = [pitchs]
+    if not isinstance(rs, list):
+        rs = [rs] * len(yaws)
+    if not isinstance(fovs, list):
+        fovs = [fovs] * len(yaws)
+    extrinsics = []
+    intrinsics = []
+    for yaw, pitch, r, fov in zip(yaws, pitchs, rs, fovs):
+        fov = torch.deg2rad(torch.tensor(float(fov))).cuda()
+        yaw = torch.tensor(float(yaw)).cuda()
+        pitch = torch.tensor(float(pitch)).cuda()
+        orig = torch.tensor([
+            torch.sin(yaw) * torch.cos(pitch),
+            torch.cos(yaw) * torch.cos(pitch),
+            torch.sin(pitch),
+        ]).cuda() * r
+        extr = utils3d.torch.extrinsics_look_at(orig, torch.tensor([0, 0, 0]).float().cuda(), torch.tensor([0, 0, 1]).float().cuda())
+        intr = utils3d.torch.intrinsics_from_fov_xy(fov, fov)
+        extrinsics.append(extr)
+        intrinsics.append(intr)
+    if not is_list:
+        extrinsics = extrinsics[0]
+        intrinsics = intrinsics[0]
+    return extrinsics, intrinsics

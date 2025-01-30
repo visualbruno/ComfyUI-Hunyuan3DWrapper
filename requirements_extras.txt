@@ -1,0 +1,7 @@
+#for rendering the mesh
+git+https://github.com/EasternJournalist/utils3d.git#egg=utils3d
+nvdiffrast
+#for quad remeshing node
+pynanoinstantmeshes
+#for fast decimation node
+pyfqmr
