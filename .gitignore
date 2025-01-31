@@ -9,3 +9,6 @@ logs/
 .idea
 tools/
 .vscode/
+build/
+dist/
+*.egg-info*

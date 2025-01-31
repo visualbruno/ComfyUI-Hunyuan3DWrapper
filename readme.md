@@ -23,12 +23,17 @@ or with portable:
 
 For the texturegen part compilation is needed, I have included my compilations as a wheel for the rasterizer, and compiled .pyd for the mesh_processor (already in place), these are compiled for:
 
-- Windows 11 python 3.12 cu126 (works with torch build on 124)
+**Windows 11 python 3.12 cu126 (works with torch build on 124)**
 
 You would do `pip install wheels\custom_rasterizer-0.1-cp312-cp312-win_amd64.whl`
 
 or with portable (in `ComfyUI_windows_portable` -folder):
-`python_embeded\python.exe -m pip install ComfyUI\custom_nodes\ComfyUI-Hunyuan3DWrapper\wheels\custom_rasterizer-0.1-cp312-cp312-win_amd64.whl` 
+`python_embeded\python.exe -m pip install ComfyUI\custom_nodes\ComfyUI-Hunyuan3DWrapper\wheels\custom_rasterizer-0.1-cp312-cp312-win_amd64.whl`
+
+**Windows 11 python 3.12 torch 2.6.0 + cu126**
+Current latest portable was updated to use pytorch 2.6.0, for this you should use new wheel:
+`python_embeded\python.exe -m pip install ComfyUI\custom_nodes\ComfyUI-Hunyuan3DWrapper\wheels\custom_rasterizer-0.1.0+torch260.cuda126-cp312-cp312-win_amd64.whl`
+
 
 This was tested to work on latest ComfyUI portable install
 

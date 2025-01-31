@@ -143,6 +143,9 @@ class DownloadAndLoadHy3DDelightModel:
             "required": {
                 "model": (["hunyuan3d-delight-v2-0"],),
             },
+            "optional": {
+                "compile_args": ("HY3DCOMPILEARGS", {"tooltip": "torch.compile settings, when connected to the model loader, torch.compile of the selected models is attempted. Requires Triton and torch 2.5.0 is recommended"}),
+            }
         }
 
     RETURN_TYPES = ("HY3DDIFFUSERSPIPE",)
@@ -150,9 +153,8 @@ class DownloadAndLoadHy3DDelightModel:
     FUNCTION = "loadmodel"
     CATEGORY = "Hunyuan3DWrapper"
 
-    def loadmodel(self, model):
+    def loadmodel(self, model, compile_args=None):
         device = mm.get_torch_device()
-        offload_device = mm.unet_offload_device()
 
         download_path = os.path.join(folder_paths.models_dir,"diffusers")
         model_path = os.path.join(download_path, model)
@@ -176,7 +178,16 @@ class DownloadAndLoadHy3DDelightModel:
         )
         delight_pipe.scheduler = EulerAncestralDiscreteScheduler.from_config(delight_pipe.scheduler.config)
         delight_pipe = delight_pipe.to(device, torch.float16)
+
         delight_pipe.enable_model_cpu_offload()
+
+        if compile_args is not None:
+            torch._dynamo.config.cache_size_limit = compile_args["dynamo_cache_size_limit"]
+            if compile_args["compile_transformer"]:
+                delight_pipe.unet = torch.compile(delight_pipe.unet)
+            if compile_args["compile_vae"]:
+                delight_pipe.vae = torch.compile(delight_pipe.vae)
+        
         
         return (delight_pipe,)
         
@@ -242,6 +253,9 @@ class DownloadAndLoadHy3DPaintModel:
             "required": {
                 "model": (["hunyuan3d-paint-v2-0"],),
             },
+            "optional": {
+                "compile_args": ("HY3DCOMPILEARGS", {"tooltip": "torch.compile settings, when connected to the model loader, torch.compile of the selected models is attempted. Requires Triton and torch 2.5.0 is recommended"}),
+            }
         }
 
     RETURN_TYPES = ("HY3DDIFFUSERSPIPE",)
@@ -249,7 +263,7 @@ class DownloadAndLoadHy3DPaintModel:
     FUNCTION = "loadmodel"
     CATEGORY = "Hunyuan3DWrapper"
 
-    def loadmodel(self, model):
+    def loadmodel(self, model, compile_args=None):
         device = mm.get_torch_device()
         offload_device = mm.unet_offload_device()
 
@@ -310,6 +324,13 @@ class DownloadAndLoadHy3DPaintModel:
             scheduler=scheduler,
             feature_extractor=feature_extractor,
             )
+        
+        if compile_args is not None:
+            torch._dynamo.config.cache_size_limit = compile_args["dynamo_cache_size_limit"]
+            if compile_args["compile_transformer"]:
+                pipeline.unet = torch.compile(pipeline.unet)
+            if compile_args["compile_vae"]:
+                pipeline.vae = torch.compile(pipeline.vae)
 
         pipeline.enable_model_cpu_offload()
         return (pipeline,)

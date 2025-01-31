@@ -1,6 +1,11 @@
 from setuptools import setup, find_packages
 from torch.utils.cpp_extension import BuildExtension, CUDAExtension
+import torch
 
+torch_version = torch.__version__.split('+')[0].replace('.', '')
+cuda_version = torch.version.cuda.replace('.', '')
+
+version = f"0.1.0+torch{torch_version}.cuda{cuda_version}"
 # build custom rasterizer
 # build with `python setup.py install`
 # nvcc is needed
@@ -13,7 +18,7 @@ custom_rasterizer_module = CUDAExtension('custom_rasterizer_kernel', [
 
 setup(
     packages=find_packages(),
-    version='0.1',
+    version=version,
     name='custom_rasterizer',
     include_package_data=True,
     package_dir={'': '.'},
@@ -22,5 +27,5 @@ setup(
     ],
     cmdclass={
         'build_ext': BuildExtension
-    }
+    },   
 )
