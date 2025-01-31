@@ -327,6 +327,7 @@ class DownloadAndLoadHy3DPaintModel:
             )
         
         if compile_args is not None:
+            pipeline.to(device)
             torch._dynamo.config.cache_size_limit = compile_args["dynamo_cache_size_limit"]
             if compile_args["compile_transformer"]:
                 pipeline.unet = torch.compile(pipeline.unet)
