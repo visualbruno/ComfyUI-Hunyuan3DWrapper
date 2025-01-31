@@ -190,8 +190,7 @@ class Hy3DDelightImage:
                 "steps": ("INT", {"default": 50, "min": 1}),
                 "width": ("INT", {"default": 512, "min": 64, "max": 4096, "step": 16}),
                 "height": ("INT", {"default": 512, "min": 64, "max": 4096, "step": 16}),
-                "cfg_image": ("FLOAT", {"default": 1.5, "min": 0.0, "max": 100.0, "step": 0.01}),
-                "cfg_text": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 100.0, "step": 0.01}),
+                "cfg_image": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 100.0, "step": 0.01}),
                 "seed": ("INT", {"default": 42, "min": 0, "max": 0xffffffffffffffff}),
         },
         "optional": {
@@ -204,7 +203,7 @@ class Hy3DDelightImage:
     FUNCTION = "process"
     CATEGORY = "Hunyuan3DWrapper"
 
-    def process(self, delight_pipe, image, width, height, cfg_image, cfg_text, steps, seed, scheduler=None):
+    def process(self, delight_pipe, image, width, height, cfg_image, steps, seed, scheduler=None):
 
         device = mm.get_torch_device()
         offload_device = mm.unet_offload_device()
@@ -227,7 +226,7 @@ class Hy3DDelightImage:
             width=width,
             num_inference_steps=steps,
             image_guidance_scale=cfg_image,
-            guidance_scale=cfg_text,
+            guidance_scale=1.0 if cfg_image == 1.0 else 1.01, #enable cfg for image, value doesn't matter as it do anything for text anyway
             output_type="pt",
             
         ).images[0]
