@@ -179,7 +179,7 @@ class DownloadAndLoadHy3DDelightModel:
         delight_pipe.scheduler = EulerAncestralDiscreteScheduler.from_config(delight_pipe.scheduler.config)
         delight_pipe = delight_pipe.to(device, torch.float16)
 
-        delight_pipe.enable_model_cpu_offload()
+        
 
         if compile_args is not None:
             torch._dynamo.config.cache_size_limit = compile_args["dynamo_cache_size_limit"]
@@ -187,7 +187,8 @@ class DownloadAndLoadHy3DDelightModel:
                 delight_pipe.unet = torch.compile(delight_pipe.unet)
             if compile_args["compile_vae"]:
                 delight_pipe.vae = torch.compile(delight_pipe.vae)
-        
+        else:
+            delight_pipe.enable_model_cpu_offload()
         
         return (delight_pipe,)
         
@@ -331,8 +332,8 @@ class DownloadAndLoadHy3DPaintModel:
                 pipeline.unet = torch.compile(pipeline.unet)
             if compile_args["compile_vae"]:
                 pipeline.vae = torch.compile(pipeline.vae)
-
-        pipeline.enable_model_cpu_offload()
+        else:
+            pipeline.enable_model_cpu_offload()
         return (pipeline,)
 
 #region Texture
