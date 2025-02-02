@@ -958,6 +958,41 @@ class Hy3DLoadMesh:
         
         return (mesh,)
 
+class Hy3DUploadMesh:
+    @classmethod
+    def INPUT_TYPES(s):
+        mesh_extensions = ['glb', 'gltf']
+        input_dir = folder_paths.get_input_directory()
+        files = []
+        for f in os.listdir(input_dir):
+            if os.path.isfile(os.path.join(input_dir, f)):
+                file_parts = f.split('.')
+                if len(file_parts) > 1 and (file_parts[-1] in mesh_extensions):
+                    files.append(f)
+        return {
+            "required": {
+                "mesh": (sorted(files),),
+            }
+        }
+    RETURN_TYPES = ("HY3DMESH",)
+    RETURN_NAMES = ("mesh",)
+    OUTPUT_TOOLTIPS = ("The glb model with mesh to texturize.",)
+    
+    FUNCTION = "load"
+    CATEGORY = "Hunyuan3DWrapper"
+    DESCRIPTION = "Loads a glb model from the given path."
+
+    def load(self, mesh):
+        path = mesh.strip()
+        if path.startswith("\""):
+            path = path[1:]
+        if path.endswith("\""):
+            path = path[:-1]
+        mesh_file = folder_paths.get_annotated_filepath(path)
+        loaded_mesh = trimesh.load(mesh_file, force="mesh")
+        
+        return (loaded_mesh,)
+
 
 class Hy3DGenerateMesh:
     @classmethod
@@ -1504,6 +1539,7 @@ NODE_CLASS_MAPPINGS = {
     "Hy3DTorchCompileSettings": Hy3DTorchCompileSettings,
     "Hy3DPostprocessMesh": Hy3DPostprocessMesh,
     "Hy3DLoadMesh": Hy3DLoadMesh,
+    "Hy3DUploadMesh": Hy3DUploadMesh,
     "Hy3DCameraConfig": Hy3DCameraConfig,
     "Hy3DMeshUVWrap": Hy3DMeshUVWrap,
     "Hy3DSampleMultiView": Hy3DSampleMultiView,
@@ -1534,6 +1570,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "Hy3DTorchCompileSettings": "Hy3D Torch Compile Settings",
     "Hy3DPostprocessMesh": "Hy3D Postprocess Mesh",
     "Hy3DLoadMesh": "Hy3D Load Mesh",
+    "Hy3DUploadMesh": "Hy3D Upload Mesh",
     "Hy3DCameraConfig": "Hy3D Camera Config",
     "Hy3DMeshUVWrap": "Hy3D Mesh UV Wrap",
     "Hy3DSampleMultiView": "Hy3D Sample MultiView",
