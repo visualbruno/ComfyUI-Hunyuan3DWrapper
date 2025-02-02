@@ -580,7 +580,7 @@ class MeshRender():
         elif return_type == 'pl':
             image = image.squeeze(-1).cpu().numpy() * 255
             image = Image.fromarray(image.astype(np.uint8))
-        return image
+        return image, visible_mask
 
     def render_position(self, elev, azim, camera_distance=None, center=None,
                         resolution=None, bg_color=[1, 1, 1], return_type='th'):

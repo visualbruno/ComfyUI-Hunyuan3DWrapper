@@ -406,8 +406,8 @@ class Hy3DRenderMultiView:
             }
         }
 
-    RETURN_TYPES = ("IMAGE", "IMAGE", "MESHRENDER")
-    RETURN_NAMES = ("normal_maps", "position_maps", "renderer")
+    RETURN_TYPES = ("IMAGE", "IMAGE", "MESHRENDER", "MASK",)
+    RETURN_NAMES = ("normal_maps", "position_maps", "renderer", "masks")
     FUNCTION = "process"
     CATEGORY = "Hunyuan3DWrapper"
 
@@ -435,11 +435,12 @@ class Hy3DRenderMultiView:
         self.render.load_mesh(mesh)
 
         if normal_space == "world":
-            normal_maps = self.render_normal_multiview(
+            normal_maps, masks = self.render_normal_multiview(
                 selected_camera_elevs, selected_camera_azims, use_abs_coor=True)
             normal_tensors = torch.stack(normal_maps, dim=0)
+            mask_tensors = torch.cat(masks, dim=0)
         elif normal_space == "tangent":
-            normal_maps = self.render_normal_multiview(
+            normal_maps, masks = self.render_normal_multiview(
                 selected_camera_elevs, selected_camera_azims, bg_color=[0, 0, 0], use_abs_coor=False)
             normal_tensors = torch.stack(normal_maps, dim=0)
             normal_tensors = 2.0 * normal_tensors - 1.0  # Map [0,1] to [-1,1]
@@ -450,21 +451,24 @@ class Hy3DRenderMultiView:
             image[..., 1] = normal_tensors[..., 1]  # View up to G
             image[..., 2] = -normal_tensors[..., 2] # View forward (negated) to B
             normal_tensors = (image + 1) * 0.5
+            mask_tensors = torch.cat(masks, dim=0)
         
         position_maps = self.render_position_multiview(
             selected_camera_elevs, selected_camera_azims)
         position_tensors = torch.stack(position_maps, dim=0)
         
-        return (normal_tensors, position_tensors, self.render,)
+        return (normal_tensors.cpu().float(), position_tensors.cpu().float(), self.render, mask_tensors.squeeze(-1).cpu().float(),)
     
     def render_normal_multiview(self, camera_elevs, camera_azims, use_abs_coor=True, bg_color=[1, 1, 1]):
         normal_maps = []
+        masks = []
         for elev, azim in zip(camera_elevs, camera_azims):
-            normal_map, _ = self.render.render_normal(
+            normal_map, mask = self.render.render_normal(
                 elev, azim, bg_color=bg_color, use_abs_coor=use_abs_coor, return_type='th')
             normal_maps.append(normal_map)
+            masks.append(mask)
 
-        return normal_maps
+        return normal_maps, masks
 
     def render_position_multiview(self, camera_elevs, camera_azims):
         position_maps = []
@@ -494,8 +498,8 @@ class Hy3DRenderSingleView:
             },
         }
 
-    RETURN_TYPES = ("IMAGE",)
-    RETURN_NAMES = ("image", )
+    RETURN_TYPES = ("IMAGE", "MASK",)
+    RETURN_NAMES = ("image", "mask", )
     FUNCTION = "process"
     CATEGORY = "Hunyuan3DWrapper"
 
@@ -555,27 +559,9 @@ class Hy3DRenderSingleView:
                 pan_x=pan_x,
                 pan_y=pan_y
             )
-            final_image = depth.unsqueeze(0).repeat(1, 1, 1, 3).cpu().float()
+            final_image = depth.unsqueeze(0).repeat(1, 1, 1, 3)
         
-        return (final_image,)
-    
-    def render_normal_multiview(self, camera_elevs, camera_azims, use_abs_coor=True):
-        normal_maps = []
-        for elev, azim in zip(camera_elevs, camera_azims):
-            normal_map, _ = self.render.render_normal(
-                elev, azim, use_abs_coor=use_abs_coor, return_type='th')
-            normal_maps.append(normal_map)
-
-        return normal_maps
-
-    def render_position_multiview(self, camera_elevs, camera_azims):
-        position_maps = []
-        for elev, azim in zip(camera_elevs, camera_azims):
-            position_map = self.render.render_position(
-                elev, azim, return_type='th')
-            position_maps.append(position_map)
-
-        return position_maps
+        return (final_image.cpu().float(), mask.squeeze(-1).cpu().float(),)
     
 class Hy3DRenderMultiViewDepth:
     @classmethod
@@ -591,8 +577,8 @@ class Hy3DRenderMultiViewDepth:
             }
         }
 
-    RETURN_TYPES = ("IMAGE", )
-    RETURN_NAMES = ("depth_maps", )
+    RETURN_TYPES = ("IMAGE", "MASK",)
+    RETURN_NAMES = ("depth_maps", "masks", )
     FUNCTION = "process"
     CATEGORY = "Hunyuan3DWrapper"
 
@@ -622,22 +608,23 @@ class Hy3DRenderMultiViewDepth:
 
         self.render.load_mesh(mesh)
 
-       
-
-        depth_maps = self.render_depth_multiview(
+        depth_maps, masks = self.render_depth_multiview(
             selected_camera_elevs, selected_camera_azims)
         depth_tensors = torch.stack(depth_maps, dim=0)
-        depth_tensors = depth_tensors.repeat(1, 1, 1, 3)
+        depth_tensors = depth_tensors.repeat(1, 1, 1, 3).cpu().float()
+        masks = torch.cat(masks, dim=0).squeeze(-1).cpu().float()
         
-        return (depth_tensors,)
+        return (depth_tensors, masks,)
     
     def render_depth_multiview(self, camera_elevs, camera_azims):
         depth_maps = []
+        masks = []
         for elev, azim in zip(camera_elevs, camera_azims):        
-            depth_map = self.render.render_depth(elev, azim, return_type='th')
+            depth_map, mask = self.render.render_depth(elev, azim, return_type='th')
             depth_maps.append(depth_map)
+            masks.append(mask)
 
-        return depth_maps
+        return depth_maps, masks
 
 class Hy3DDiffusersSchedulerConfig:
     @classmethod
