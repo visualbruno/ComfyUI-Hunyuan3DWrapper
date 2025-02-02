@@ -1408,14 +1408,16 @@ class Hy3DNvdiffrastRenderer:
             # Get texture from material
             if hasattr(mesh_copy.visual.material, 'baseColorTexture'):
                 pil_texture = getattr(mesh_copy.visual.material, "baseColorTexture")
-                pil_texture = pil_texture.transpose(Image.FLIP_TOP_BOTTOM)
+            elif hasattr(mesh_copy.visual.material, 'image'):
+                pil_texture = getattr(mesh_copy.visual.material, "image")
+            pil_texture = pil_texture.transpose(Image.FLIP_TOP_BOTTOM)
 
-                # Convert PIL to tensor [B,C,H,W]
-                transform = transforms.Compose([
-                    transforms.ToTensor(),
-                ])
-                texture = transform(pil_texture).to(device)
-                texture = texture.unsqueeze(0).permute(0, 2, 3, 1).contiguous() #need to be contiguous for nvdiffrast
+            # Convert PIL to tensor [B,C,H,W]
+            transform = transforms.Compose([
+                transforms.ToTensor(),
+            ])
+            texture = transform(pil_texture).to(device)
+            texture = texture.unsqueeze(0).permute(0, 2, 3, 1).contiguous() #need to be contiguous for nvdiffrast
         else:
             print("No texture found")
             # Fallback to vertex colors if no texture
