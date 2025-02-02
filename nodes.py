@@ -961,7 +961,7 @@ class Hy3DLoadMesh:
 class Hy3DUploadMesh:
     @classmethod
     def INPUT_TYPES(s):
-        mesh_extensions = ['glb', 'gltf']
+        mesh_extensions = ['glb', 'gltf', 'obj', 'ply', 'stl', '3mf']
         input_dir = folder_paths.get_input_directory()
         files = []
         for f in os.listdir(input_dir):

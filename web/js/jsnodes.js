@@ -76,7 +76,7 @@ function addUploadWidget(nodeType, nodeData, widgetName) {
     	
 		Object.assign(fileInput, {
 			type: "file",
-			accept: ".glb,.gltf,model/gltf-binary,model/gltf+json",
+			accept: ".obj,.glb,.gltf,.stl,.3mf,.ply,model/obj,model/gltf-binary,model/gltf+json,application/vnd.ms-pki.stl,application/x-stl,application/vnd.ms-package.3dmanufacturing-3dmodel+xml,application/x-ply,application/ply",
 			style: "display: none",
 			onchange: async () => {
 				if (fileInput.files.length) {
