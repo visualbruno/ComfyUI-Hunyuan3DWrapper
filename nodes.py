@@ -1327,6 +1327,7 @@ class Hy3DExportMesh:
             "required": {
                 "mesh": ("HY3DMESH",),
                 "filename_prefix": ("STRING", {"default": "3D/Hy3D"}),
+                "file_format": (["glb", "obj", "ply", "stl", "3mf", "dae"],),
             },
         }
 
@@ -1335,13 +1336,13 @@ class Hy3DExportMesh:
     FUNCTION = "process"
     CATEGORY = "Hunyuan3DWrapper"
 
-    def process(self, mesh, filename_prefix):
+    def process(self, mesh, filename_prefix, file_format):
         full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path(filename_prefix, folder_paths.get_output_directory())
-        output_glb_path = Path(full_output_folder, f'{filename}_{counter:05}_.glb')
+        output_glb_path = Path(full_output_folder, f'{filename}_{counter:05}_.{file_format}')
         output_glb_path.parent.mkdir(exist_ok=True)
-        mesh.export(output_glb_path)
+        mesh.export(output_glb_path, file_type=file_format)
 
-        relative_path = Path(subfolder) / f'{filename}_{counter:05}_.glb'
+        relative_path = Path(subfolder) / f'{filename}_{counter:05}_.{file_format}'
         
         return (str(relative_path), )
     
