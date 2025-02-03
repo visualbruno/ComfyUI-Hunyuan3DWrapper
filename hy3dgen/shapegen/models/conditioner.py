@@ -78,7 +78,7 @@ class ImageEncoder(nn.Module):
             mask = mask.to(image)
             image = image * mask
 
-        inputs = image
+        inputs = self.transform(image)
         outputs = self.model(inputs)
 
         last_hidden_state = outputs.last_hidden_state
