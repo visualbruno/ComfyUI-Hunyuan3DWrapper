@@ -1447,7 +1447,7 @@ class Hy3DNvdiffrastRenderer:
             texture = transform(pil_texture).to(device)
             texture = texture.unsqueeze(0).permute(0, 2, 3, 1).contiguous() #need to be contiguous for nvdiffrast
         else:
-            print("No texture found")
+            log.warning("No texture found")
             # Fallback to vertex colors if no texture
             uvs = None
             texture = None

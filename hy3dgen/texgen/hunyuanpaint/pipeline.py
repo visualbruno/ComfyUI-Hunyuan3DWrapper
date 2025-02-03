@@ -485,7 +485,7 @@ class HunyuanPaintPipeline(StableDiffusionPipeline):
         timesteps, num_inference_steps = retrieve_timesteps(
             self.scheduler, num_inference_steps, device, timesteps, sigmas
         )
-        print("timesteps", timesteps)
+        #print("timesteps", timesteps)
         assert num_images_per_prompt == 1
         # 5. Prepare latent variables
         num_channels_latents = self.unet.config.in_channels
@@ -503,7 +503,7 @@ class HunyuanPaintPipeline(StableDiffusionPipeline):
             latents,
             denoise_strength=denoise_strength,
         )
-        print("timesteps", timesteps)
+        #print("timesteps", timesteps)
 
         # 6. Prepare extra step kwargs. TODO: Logic should ideally just be moved out of the pipeline
         extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
