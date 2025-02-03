@@ -1,6 +1,7 @@
 import os
 import torch
 import torchvision.transforms as transforms
+import torch.nn.functional as F
 from PIL import Image
 from pathlib import Path
 import numpy as np
@@ -1042,6 +1043,8 @@ class Hy3DGenerateMesh:
 
         if mask is not None:
             mask = mask.unsqueeze(0).to(device)
+            if mask.shape[2] != image.shape[2] or mask.shape[3] != image.shape[3]:
+                mask = F.interpolate(mask, size=(image.shape[2], image.shape[3]), mode='nearest')
 
         pipeline.to(device)
 
