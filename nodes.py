@@ -692,6 +692,8 @@ class Hy3DSampleMultiView:
             "optional": {
                 "camera_config": ("HY3DCAMERA",),
                 "scheduler": ("NOISESCHEDULER",),
+                "denoise_strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.01}),
+                "samples": ("LATENT", ),
             }
         }
 
@@ -700,7 +702,8 @@ class Hy3DSampleMultiView:
     FUNCTION = "process"
     CATEGORY = "Hunyuan3DWrapper"
 
-    def process(self, pipeline, ref_image, normal_maps, position_maps, view_size, seed, steps, camera_config=None, scheduler=None):
+    def process(self, pipeline, ref_image, normal_maps, position_maps, view_size, seed, steps, 
+                camera_config=None, scheduler=None, denoise_strength=1.0, samples=None):
         device = mm.get_torch_device()
         mm.soft_empty_cache()
         torch.manual_seed(seed)
@@ -720,7 +723,7 @@ class Hy3DSampleMultiView:
         camera_info = [(((azim // 30) + 9) % 12) // {-90: 3, -45: 2, -20: 1, 0: 1, 20: 1, 45: 2, 90: 3}[
             elev] + {-90: 36, -45: 30, -20: 0, 0: 12, 20: 24, 45: 30, 90: 40}[elev] for azim, elev in
                     zip(selected_camera_azims, selected_camera_elevs)]
-        print(camera_info)
+        #print(camera_info)
         
         normal_maps_np = (normal_maps * 255).to(torch.uint8).cpu().numpy()
         normal_maps_pil = [Image.fromarray(normal_map) for normal_map in normal_maps_np]
@@ -754,6 +757,7 @@ class Hy3DSampleMultiView:
             width=view_size,
             height=view_size,
             generator=generator,
+            latents=samples["samples"] if samples is not None else None,
             num_in_batch = num_view,
             camera_info_gen = [camera_info],
             camera_info_ref = [[0]],
@@ -762,7 +766,8 @@ class Hy3DSampleMultiView:
             num_inference_steps=steps,
             output_type="pt",
             callback_on_step_end=callback,
-            callback_on_step_end_tensor_inputs=["latents", "prompt_embeds", "negative_prompt_embeds"]
+            callback_on_step_end_tensor_inputs=["latents", "prompt_embeds", "negative_prompt_embeds"],
+            denoise_strength=denoise_strength
             ).images
 
         out_tensors = multiview_images.permute(0, 2, 3, 1).cpu().float()

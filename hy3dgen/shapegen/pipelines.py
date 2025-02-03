@@ -183,8 +183,12 @@ class Hunyuan3DDiTPipeline:
 
         
         # load model
+        if "guidance_in.in_layer.bias" in ckpt['model']: #guidance_in.in_layer.bias
+            logger.info("Model has guidance_in, setting guidance_embed to True")
+            config['model']['params']['guidance_embed'] = True
         config['model']['params']['attention_mode'] = attention_mode
         config['vae']['params']['attention_mode'] = attention_mode
+        
         with init_empty_weights():
             model = instantiate_from_config(config['model'])
             vae = instantiate_from_config(config['vae'])
@@ -603,6 +607,7 @@ class Hunyuan3DDiTFlowMatchingPipeline(Hunyuan3DDiTPipeline):
         if hasattr(self.model, 'guidance_embed') and \
             self.model.guidance_embed is True:
             guidance = torch.tensor([guidance_scale] * batch_size, device=device, dtype=dtype)
+        print("guidance: ", guidance)
 
         comfy_pbar = ProgressBar(num_inference_steps)
         for i, t in enumerate(tqdm(timesteps, disable=not enable_pbar, desc="Diffusion Sampling:")):

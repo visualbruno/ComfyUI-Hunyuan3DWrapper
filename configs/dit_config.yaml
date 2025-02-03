@@ -11,6 +11,7 @@ model:
     axes_dim: [ 64 ]
     theta: 10000
     qkv_bias: True
+    guidance_embed: False
 
 vae:
   target: .hy3dgen.shapegen.models.ShapeVAE

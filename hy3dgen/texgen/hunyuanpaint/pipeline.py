@@ -233,7 +233,52 @@ class HunyuanPaintPipeline(StableDiffusionPipeline):
             return (image,)
 
         return ImagePipelineOutput(images=image)
+    
+    def get_timesteps(self, num_inference_steps, strength, device):
+        # get the original timestep using init_timestep
+        init_timestep = min(int(num_inference_steps * strength), num_inference_steps)
 
+        t_start = max(num_inference_steps - init_timestep, 0)
+        timesteps = self.scheduler.timesteps[t_start * self.scheduler.order :]
+        if hasattr(self.scheduler, "set_begin_index"):
+            self.scheduler.set_begin_index(t_start * self.scheduler.order)
+
+        return timesteps, num_inference_steps - t_start
+    
+    def prepare_latents(self, batch_size, num_channels_latents, height, width, dtype, device, generator, timesteps, num_inference_steps, latents=None, denoise_strength=1.0):
+        from diffusers.utils.torch_utils import randn_tensor
+        shape = (
+            batch_size,
+            num_channels_latents,
+            int(height) // self.vae_scale_factor,
+            int(width) // self.vae_scale_factor,
+        )
+        if isinstance(generator, list) and len(generator) != batch_size:
+            raise ValueError(
+                f"You have passed a list of generators of length {len(generator)}, but requested an effective batch"
+                f" size of {batch_size}. Make sure the batch size matches the length of the generators."
+            )
+        noise = randn_tensor(shape, generator=generator, device=device, dtype=dtype)
+        if latents is None:
+            latents = noise
+        elif denoise_strength < 1.0:
+            latents = latents.to(noise)
+            timesteps, num_inference_steps = self.get_timesteps(num_inference_steps, denoise_strength, device)
+            latent_timestep = timesteps[:1].repeat(batch_size)
+            latents = self.vae.config.scaling_factor * latents
+
+            latents = self.scheduler.add_noise(latents, noise, latent_timestep)
+            
+           
+            #latents = latents * (1 - latent_timestep / 1000) + latent_timestep / 1000 * noise
+        else:
+            latents = latents.to(device)
+            latents = self.vae.config.scaling_factor * latents
+
+        # scale the initial noise by the standard deviation required by the scheduler
+        latents = latents * self.scheduler.init_noise_sigma
+        return latents.to(torch.float16), timesteps
+    
     def denoise(
         self,
         prompt: Union[str, List[str]] = None,
@@ -261,6 +306,7 @@ class HunyuanPaintPipeline(StableDiffusionPipeline):
             Union[Callable[[int, int, Dict], None], PipelineCallback, MultiPipelineCallbacks]
         ] = None,
         callback_on_step_end_tensor_inputs: List[str] = ["latents"],
+        denoise_strength: Optional[float] = None,
         **kwargs,
     ):
         r"""
@@ -439,10 +485,12 @@ class HunyuanPaintPipeline(StableDiffusionPipeline):
         timesteps, num_inference_steps = retrieve_timesteps(
             self.scheduler, num_inference_steps, device, timesteps, sigmas
         )
+        print("timesteps", timesteps)
         assert num_images_per_prompt == 1
         # 5. Prepare latent variables
         num_channels_latents = self.unet.config.in_channels
-        latents = self.prepare_latents(
+
+        latents, timesteps = self.prepare_latents(
             batch_size * kwargs['num_in_batch'],  # num_images_per_prompt,
             num_channels_latents,
             height,
@@ -450,8 +498,12 @@ class HunyuanPaintPipeline(StableDiffusionPipeline):
             prompt_embeds.dtype,
             device,
             generator,
+            timesteps,
+            num_inference_steps,
             latents,
+            denoise_strength=denoise_strength,
         )
+        print("timesteps", timesteps)
 
         # 6. Prepare extra step kwargs. TODO: Logic should ideally just be moved out of the pipeline
         extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
@@ -462,7 +514,7 @@ class HunyuanPaintPipeline(StableDiffusionPipeline):
             if (ip_adapter_image is not None or ip_adapter_image_embeds is not None)
             else None
         )
-
+        
         # 6.2 Optionally get Guidance Scale Embedding
         timestep_cond = None
         if self.unet.config.time_cond_proj_dim is not None:
