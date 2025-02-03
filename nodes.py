@@ -450,8 +450,17 @@ class Hy3DRenderMultiView:
             image[..., 0] = normal_tensors[..., 0]  # View right to R
             image[..., 1] = normal_tensors[..., 1]  # View up to G
             image[..., 2] = -normal_tensors[..., 2] # View forward (negated) to B
-            normal_tensors = (image + 1) * 0.5
+
+            # Create background color
+            background_color = torch.tensor([0.502, 0.502, 1.0], device=normal_tensors.device) #8080FF
+
             mask_tensors = torch.cat(masks, dim=0)
+            
+            # Blend rendered image with background
+            
+            normal_tensors = (image + 1) * 0.5
+            normal_tensors = normal_tensors * mask_tensors + background_color * (1 - mask_tensors)
+            
         
         position_maps = self.render_position_multiview(
             selected_camera_elevs, selected_camera_azims)
@@ -494,7 +503,7 @@ class Hy3DRenderSingleView:
                 "ortho_scale": ("FLOAT", {"default": 1.2, "min": 0.1, "max": 10.0, "step": 0.001}),
                 "azimuth": ("FLOAT", {"default": 0, "min": -360, "max": 360, "step": 1}),
                 "elevation": ("FLOAT", {"default": 0, "min": -360, "max": 360, "step": 1}),
-                "bg_color": ("STRING", {"default": "0, 0, 0", "tooltip": "Color as RGB values in range 0-255, separated by commas."}),
+                "bg_color": ("STRING", {"default": "128, 128, 255", "tooltip": "Color as RGB values in range 0-255, separated by commas."}),
             },
         }
 
@@ -1067,7 +1076,7 @@ class Hy3DVAEDecode:
                 "latents": ("HY3DLATENT", ),
                 "box_v": ("FLOAT", {"default": 1.01, "min": -10.0, "max": 10.0, "step": 0.001}),
                 "octree_resolution": ("INT", {"default": 384, "min": 64, "max": 4096, "step": 16}),
-                "num_chunks": ("INT", {"default": 8000, "min": 1, "max": 10000000, "step": 1}),
+                "num_chunks": ("INT", {"default": 8000, "min": 1, "max": 10000000, "step": 1, "tooltip": "Number of chunks to process at once, higher values use more memory, but make the process faster"}),
                 "mc_level": ("FLOAT", {"default": 0, "min": -1.0, "max": 1.0, "step": 0.0001}),
                 "mc_algo": (["mc", "dmc"], {"default": "mc"}),
             },
