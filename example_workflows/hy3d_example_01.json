@@ -1,6 +1,6 @@
 {
-  "last_node_id": 149,
-  "last_link_id": 268,
+  "last_node_id": 152,
+  "last_link_id": 274,
   "nodes": [
     {
       "id": 64,
@@ -90,126 +90,6 @@
       "widgets_values": []
     },
     {
-      "id": 61,
-      "type": "Hy3DCameraConfig",
-      "pos": [
-        587.6965942382812,
-        1142.1839599609375
-      ],
-      "size": [
-        342.9443054199219,
-        154
-      ],
-      "flags": {},
-      "order": 0,
-      "mode": 0,
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "camera_config",
-          "type": "HY3DCAMERA",
-          "links": [],
-          "slot_index": 0
-        }
-      ],
-      "properties": {
-        "Node name for S&R": "Hy3DCameraConfig"
-      },
-      "widgets_values": [
-        "0, 90, 180, 270, 0, 180",
-        "0, 0, 0, 0, 90, -90",
-        "1, 0.1, 0.5, 0.1, 0.05, 0.05",
-        1.45,
-        1.2
-      ]
-    },
-    {
-      "id": 115,
-      "type": "Note",
-      "pos": [
-        324.2544860839844,
-        1137.7796630859375
-      ],
-      "size": [
-        244.82861328125,
-        119.78506469726562
-      ],
-      "flags": {},
-      "order": 1,
-      "mode": 0,
-      "inputs": [],
-      "outputs": [],
-      "properties": {},
-      "widgets_values": [
-        "These are the default camera views used, customizing is fully experimental"
-      ],
-      "color": "#432",
-      "bgcolor": "#653"
-    },
-    {
-      "id": 79,
-      "type": "Hy3DRenderMultiView",
-      "pos": [
-        593.6895141601562,
-        914.635009765625
-      ],
-      "size": [
-        342.5999755859375,
-        170
-      ],
-      "flags": {},
-      "order": 33,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "mesh",
-          "type": "HY3DMESH",
-          "link": 134
-        },
-        {
-          "name": "camera_config",
-          "type": "HY3DCAMERA",
-          "link": null,
-          "shape": 7
-        }
-      ],
-      "outputs": [
-        {
-          "name": "normal_maps",
-          "type": "IMAGE",
-          "links": [
-            148,
-            193
-          ],
-          "slot_index": 0
-        },
-        {
-          "name": "position_maps",
-          "type": "IMAGE",
-          "links": [
-            142,
-            199
-          ],
-          "slot_index": 1
-        },
-        {
-          "name": "renderer",
-          "type": "MESHRENDER",
-          "links": [
-            151
-          ]
-        }
-      ],
-      "properties": {
-        "Node name for S&R": "Hy3DRenderMultiView"
-      },
-      "widgets_values": [
-        1024,
-        1024,
-        "world"
-      ]
-    },
-    {
       "id": 116,
       "type": "PreviewImage",
       "pos": [
@@ -248,7 +128,7 @@
         58
       ],
       "flags": {},
-      "order": 2,
+      "order": 0,
       "mode": 2,
       "inputs": [],
       "outputs": [
@@ -265,59 +145,6 @@
       },
       "widgets_values": [
         "4x_foolhardy_Remacri.pth"
-      ]
-    },
-    {
-      "id": 117,
-      "type": "ImageResize+",
-      "pos": [
-        2288.609130859375,
-        958.801025390625
-      ],
-      "size": [
-        315,
-        218
-      ],
-      "flags": {},
-      "order": 38,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "image",
-          "type": "IMAGE",
-          "link": 202
-        }
-      ],
-      "outputs": [
-        {
-          "name": "IMAGE",
-          "type": "IMAGE",
-          "links": [
-            203
-          ],
-          "slot_index": 0
-        },
-        {
-          "name": "width",
-          "type": "INT",
-          "links": null
-        },
-        {
-          "name": "height",
-          "type": "INT",
-          "links": null
-        }
-      ],
-      "properties": {
-        "Node name for S&R": "ImageResize+"
-      },
-      "widgets_values": [
-        1024,
-        1024,
-        "lanczos",
-        "stretch",
-        "always",
-        0
       ]
     },
     {
@@ -446,7 +273,7 @@
         125.7635726928711
       ],
       "flags": {},
-      "order": 3,
+      "order": 1,
       "mode": 0,
       "inputs": [],
       "outputs": [],
@@ -496,83 +323,6 @@
       "widgets_values": []
     },
     {
-      "id": 13,
-      "type": "LoadImage",
-      "pos": [
-        -1117.525390625,
-        -781.437744140625
-      ],
-      "size": [
-        315,
-        314.0000305175781
-      ],
-      "flags": {},
-      "order": 4,
-      "mode": 0,
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "IMAGE",
-          "type": "IMAGE",
-          "links": [
-            69
-          ],
-          "slot_index": 0
-        },
-        {
-          "name": "MASK",
-          "type": "MASK",
-          "links": [],
-          "slot_index": 1
-        }
-      ],
-      "properties": {
-        "Node name for S&R": "LoadImage"
-      },
-      "widgets_values": [
-        "s-l1600 - 2022-02-25T095119.012.jpg",
-        "image"
-      ]
-    },
-    {
-      "id": 100,
-      "type": "Preview3D",
-      "pos": [
-        4520,
-        640
-      ],
-      "size": [
-        1636.0745849609375,
-        1672.490234375
-      ],
-      "flags": {},
-      "order": 48,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "model_file",
-          "type": "STRING",
-          "link": 164,
-          "widget": {
-            "name": "model_file"
-          }
-        }
-      ],
-      "outputs": [],
-      "properties": {
-        "Node name for S&R": "Preview3D"
-      },
-      "widgets_values": [
-        "3D/Hy3D_00187_.glb",
-        "original",
-        "#000000",
-        10,
-        "original",
-        75,
-        null
-      ]
-    },
-    {
       "id": 133,
       "type": "MaskToImage",
       "pos": [
@@ -586,7 +336,7 @@
       "flags": {
         "collapsed": true
       },
-      "order": 15,
+      "order": 14,
       "mode": 0,
       "inputs": [
         {
@@ -665,7 +415,7 @@
         {
           "name": "camera_config",
           "type": "HY3DCAMERA",
-          "link": null,
+          "link": 274,
           "shape": 7
         }
       ],
@@ -845,7 +595,7 @@
         82
       ],
       "flags": {},
-      "order": 5,
+      "order": 2,
       "mode": 0,
       "inputs": [],
       "outputs": [
@@ -905,7 +655,7 @@
         102
       ],
       "flags": {},
-      "order": 6,
+      "order": 3,
       "mode": 0,
       "inputs": [
         {
@@ -942,53 +692,6 @@
       ]
     },
     {
-      "id": 140,
-      "type": "Hy3DVAEDecode",
-      "pos": [
-        -35.7520866394043,
-        -127.73638153076172
-      ],
-      "size": [
-        315,
-        174
-      ],
-      "flags": {},
-      "order": 25,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "vae",
-          "type": "HY3DVAE",
-          "link": 250
-        },
-        {
-          "name": "latents",
-          "type": "HY3DLATENT",
-          "link": 255
-        }
-      ],
-      "outputs": [
-        {
-          "name": "mesh",
-          "type": "HY3DMESH",
-          "links": [
-            251
-          ],
-          "slot_index": 0
-        }
-      ],
-      "properties": {
-        "Node name for S&R": "Hy3DVAEDecode"
-      },
-      "widgets_values": [
-        1.01,
-        384,
-        8000,
-        0,
-        "mc"
-      ]
-    },
-    {
       "id": 17,
       "type": "Hy3DExportMesh",
       "pos": [
@@ -997,7 +700,7 @@
       ],
       "size": [
         315.6768493652344,
-        58.98750305175781
+        82
       ],
       "flags": {},
       "order": 29,
@@ -1014,7 +717,7 @@
           "name": "glb_path",
           "type": "STRING",
           "links": [
-            94
+            269
           ],
           "slot_index": 0
         }
@@ -1023,7 +726,8 @@
         "Node name for S&R": "Hy3DExportMesh"
       },
       "widgets_values": [
-        "3D/Hy3D"
+        "3D/Hy3D",
+        "glb"
       ]
     },
     {
@@ -1260,7 +964,7 @@
         218
       ],
       "flags": {},
-      "order": 14,
+      "order": 17,
       "mode": 0,
       "inputs": [
         {
@@ -1303,44 +1007,6 @@
       ]
     },
     {
-      "id": 63,
-      "type": "Preview3D",
-      "pos": [
-        725.4800415039062,
-        -605.6441650390625
-      ],
-      "size": [
-        985.0338745117188,
-        1102.6461181640625
-      ],
-      "flags": {},
-      "order": 32,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "model_file",
-          "type": "STRING",
-          "link": 94,
-          "widget": {
-            "name": "model_file"
-          }
-        }
-      ],
-      "outputs": [],
-      "properties": {
-        "Node name for S&R": "Preview3D"
-      },
-      "widgets_values": [
-        "3D/Hy3D_00372_.glb",
-        "normal",
-        "#000000",
-        10,
-        "original",
-        75,
-        null
-      ]
-    },
-    {
       "id": 132,
       "type": "SolidMask",
       "pos": [
@@ -1352,7 +1018,7 @@
         106
       ],
       "flags": {},
-      "order": 7,
+      "order": 4,
       "mode": 0,
       "inputs": [],
       "outputs": [
@@ -1386,9 +1052,16 @@
         58
       ],
       "flags": {},
-      "order": 8,
+      "order": 5,
       "mode": 0,
-      "inputs": [],
+      "inputs": [
+        {
+          "name": "compile_args",
+          "type": "HY3DCOMPILEARGS",
+          "link": null,
+          "shape": 7
+        }
+      ],
       "outputs": [
         {
           "name": "multiview_pipe",
@@ -1418,7 +1091,7 @@
         84.1800765991211
       ],
       "flags": {},
-      "order": 9,
+      "order": 6,
       "mode": 0,
       "inputs": [],
       "outputs": [
@@ -1457,7 +1130,7 @@
         99.84209442138672
       ],
       "flags": {},
-      "order": 10,
+      "order": 7,
       "mode": 0,
       "inputs": [],
       "outputs": [],
@@ -1480,7 +1153,7 @@
         86.12521362304688
       ],
       "flags": {},
-      "order": 11,
+      "order": 8,
       "mode": 0,
       "inputs": [],
       "outputs": [],
@@ -1503,7 +1176,7 @@
         86.12521362304688
       ],
       "flags": {},
-      "order": 12,
+      "order": 9,
       "mode": 0,
       "inputs": [],
       "outputs": [],
@@ -1624,7 +1297,7 @@
           "name": "glb_path",
           "type": "STRING",
           "links": [
-            164
+            270
           ],
           "slot_index": 0
         }
@@ -1633,7 +1306,8 @@
         "Node name for S&R": "Hy3DExportMesh"
       },
       "widgets_values": [
-        "3D/Hy3D_textured"
+        "3D/Hy3D_textured",
+        "glb"
       ]
     },
     {
@@ -1645,7 +1319,7 @@
       ],
       "size": [
         311.7241516113281,
-        230
+        270
       ],
       "flags": {},
       "order": 35,
@@ -1674,7 +1348,7 @@
         {
           "name": "camera_config",
           "type": "HY3DCAMERA",
-          "link": null,
+          "link": 273,
           "shape": 7
         },
         {
@@ -1690,6 +1364,12 @@
           "widget": {
             "name": "view_size"
           }
+        },
+        {
+          "name": "samples",
+          "type": "LATENT",
+          "link": null,
+          "shape": 7
         }
       ],
       "outputs": [
@@ -1711,7 +1391,8 @@
         512,
         25,
         1024,
-        "fixed"
+        "fixed",
+        1
       ]
     },
     {
@@ -1797,9 +1478,16 @@
         58
       ],
       "flags": {},
-      "order": 13,
+      "order": 10,
       "mode": 0,
-      "inputs": [],
+      "inputs": [
+        {
+          "name": "compile_args",
+          "type": "HY3DCOMPILEARGS",
+          "link": null,
+          "shape": 7
+        }
+      ],
       "outputs": [
         {
           "name": "delight_pipe",
@@ -1857,7 +1545,7 @@
         82
       ],
       "flags": {},
-      "order": 17,
+      "order": 16,
       "mode": 0,
       "inputs": [
         {
@@ -1884,18 +1572,178 @@
       ]
     },
     {
+      "id": 150,
+      "type": "Preview3D",
+      "pos": [
+        725.4800415039062,
+        -605.6441650390625
+      ],
+      "size": [
+        929.393798828125,
+        1140.970947265625
+      ],
+      "flags": {},
+      "order": 32,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model_file",
+          "type": "STRING",
+          "link": 269,
+          "widget": {
+            "name": "model_file"
+          }
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "Preview3D"
+      },
+      "widgets_values": [
+        "",
+        "original",
+        10,
+        "original",
+        75,
+        null
+      ]
+    },
+    {
+      "id": 13,
+      "type": "LoadImage",
+      "pos": [
+        -1117.525390625,
+        -781.437744140625
+      ],
+      "size": [
+        315,
+        314.0000305175781
+      ],
+      "flags": {},
+      "order": 11,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            69
+          ],
+          "slot_index": 0
+        },
+        {
+          "name": "MASK",
+          "type": "MASK",
+          "links": [],
+          "slot_index": 1
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "LoadImage"
+      },
+      "widgets_values": [
+        "s-l1600 - 2022-02-25T095119.012.jpg",
+        "image"
+      ]
+    },
+    {
+      "id": 140,
+      "type": "Hy3DVAEDecode",
+      "pos": [
+        -35.7520866394043,
+        -127.73638153076172
+      ],
+      "size": [
+        315,
+        174
+      ],
+      "flags": {},
+      "order": 25,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "vae",
+          "type": "HY3DVAE",
+          "link": 250
+        },
+        {
+          "name": "latents",
+          "type": "HY3DLATENT",
+          "link": 255
+        }
+      ],
+      "outputs": [
+        {
+          "name": "mesh",
+          "type": "HY3DMESH",
+          "links": [
+            251
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "Hy3DVAEDecode"
+      },
+      "widgets_values": [
+        1.01,
+        384,
+        32000,
+        0,
+        "mc"
+      ]
+    },
+    {
+      "id": 151,
+      "type": "Preview3D",
+      "pos": [
+        4520,
+        640
+      ],
+      "size": [
+        1110.3355712890625,
+        1471.956298828125
+      ],
+      "flags": {},
+      "order": 48,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model_file",
+          "type": "STRING",
+          "link": 270,
+          "widget": {
+            "name": "model_file"
+          }
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "Preview3D"
+      },
+      "widgets_values": [
+        "",
+        "original",
+        10,
+        "original",
+        75,
+        null
+      ]
+    },
+    {
       "id": 149,
       "type": "Hy3DDiffusersSchedulerConfig",
       "pos": [
-        1928.853271484375,
-        1176.84326171875
+        1929.843994140625,
+        1232.3370361328125
       ],
       "size": [
         288.13494873046875,
         82
       ],
       "flags": {},
-      "order": 16,
+      "order": 15,
       "mode": 0,
       "inputs": [
         {
@@ -1920,6 +1768,188 @@
       "widgets_values": [
         "Euler A",
         "default"
+      ]
+    },
+    {
+      "id": 79,
+      "type": "Hy3DRenderMultiView",
+      "pos": [
+        593.6895141601562,
+        914.635009765625
+      ],
+      "size": [
+        342.5999755859375,
+        170
+      ],
+      "flags": {},
+      "order": 33,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "mesh",
+          "type": "HY3DMESH",
+          "link": 134
+        },
+        {
+          "name": "camera_config",
+          "type": "HY3DCAMERA",
+          "link": 272,
+          "shape": 7
+        }
+      ],
+      "outputs": [
+        {
+          "name": "normal_maps",
+          "type": "IMAGE",
+          "links": [
+            148,
+            193
+          ],
+          "slot_index": 0
+        },
+        {
+          "name": "position_maps",
+          "type": "IMAGE",
+          "links": [
+            142,
+            199
+          ],
+          "slot_index": 1
+        },
+        {
+          "name": "renderer",
+          "type": "MESHRENDER",
+          "links": [
+            151
+          ]
+        },
+        {
+          "name": "masks",
+          "type": "MASK",
+          "links": null
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "Hy3DRenderMultiView"
+      },
+      "widgets_values": [
+        1024,
+        2048,
+        "world"
+      ]
+    },
+    {
+      "id": 117,
+      "type": "ImageResize+",
+      "pos": [
+        2288.609130859375,
+        958.801025390625
+      ],
+      "size": [
+        315,
+        218
+      ],
+      "flags": {},
+      "order": 38,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 202
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            203
+          ],
+          "slot_index": 0
+        },
+        {
+          "name": "width",
+          "type": "INT",
+          "links": null
+        },
+        {
+          "name": "height",
+          "type": "INT",
+          "links": null
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "ImageResize+"
+      },
+      "widgets_values": [
+        2048,
+        2048,
+        "lanczos",
+        "stretch",
+        "always",
+        0
+      ]
+    },
+    {
+      "id": 115,
+      "type": "Note",
+      "pos": [
+        324.2544860839844,
+        1137.7796630859375
+      ],
+      "size": [
+        244.82861328125,
+        119.78506469726562
+      ],
+      "flags": {},
+      "order": 12,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {},
+      "widgets_values": [
+        "These are the default camera views used, customizing is fully experimental. To customize."
+      ],
+      "color": "#432",
+      "bgcolor": "#653"
+    },
+    {
+      "id": 61,
+      "type": "Hy3DCameraConfig",
+      "pos": [
+        592.6513061523438,
+        1132.274658203125
+      ],
+      "size": [
+        342.9443054199219,
+        154
+      ],
+      "flags": {},
+      "order": 13,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "camera_config",
+          "type": "HY3DCAMERA",
+          "links": [
+            272,
+            273,
+            274
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "Hy3DCameraConfig"
+      },
+      "widgets_values": [
+        "0, 90, 180, 270, 0, 180",
+        "0, 0, 0, 0, 90, -90",
+        "1, 0.1, 0.5, 0.1, 0.05, 0.05",
+        1.45,
+        1.2
       ]
     }
   ],
@@ -1963,14 +1993,6 @@
       17,
       0,
       "HY3DMESH"
-    ],
-    [
-      94,
-      17,
-      0,
-      63,
-      0,
-      "STRING"
     ],
     [
       99,
@@ -2035,14 +2057,6 @@
       99,
       0,
       "HY3DMESH"
-    ],
-    [
-      164,
-      99,
-      0,
-      100,
-      0,
-      "STRING"
     ],
     [
       185,
@@ -2371,6 +2385,46 @@
       149,
       0,
       "HY3DDIFFUSERSPIPE"
+    ],
+    [
+      269,
+      17,
+      0,
+      150,
+      0,
+      "STRING"
+    ],
+    [
+      270,
+      99,
+      0,
+      151,
+      0,
+      "STRING"
+    ],
+    [
+      272,
+      61,
+      0,
+      79,
+      1,
+      "HY3DCAMERA"
+    ],
+    [
+      273,
+      61,
+      0,
+      88,
+      4,
+      "HY3DCAMERA"
+    ],
+    [
+      274,
+      61,
+      0,
+      92,
+      2,
+      "HY3DCAMERA"
     ]
   ],
   "groups": [
@@ -2430,15 +2484,15 @@
   "config": {},
   "extra": {
     "ds": {
-      "scale": 0.6115909044841744,
+      "scale": 0.5054470284993183,
       "offset": [
-        1442.6809275866094,
-        50.011509540598716
+        197.948937186443,
+        -188.3505800237151
       ]
     },
     "node_versions": {
-      "comfy-core": "0.3.12",
-      "ComfyUI-Hunyuan3DWrapper": "9b29fe4bbe870f9ccc04370241799178cfcc8718",
+      "comfy-core": "0.3.13",
+      "ComfyUI-Hunyuan3DWrapper": "1b7c0606e21748eee1569b305c544ec04e4b5c00",
       "ComfyUI_essentials": "76e9d1e4399bd025ce8b12c290753d58f9f53e93"
     },
     "VHS_latentpreview": true,
