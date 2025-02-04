@@ -112,6 +112,7 @@ class Hy3DModelLoader:
             "optional": {
                 "compile_args": ("HY3DCOMPILEARGS", {"tooltip": "torch.compile settings, when connected to the model loader, torch.compile of the selected models is attempted. Requires Triton and torch 2.5.0 is recommended"}),
                 "attention_mode": (["sdpa", "sageattn"], {"default": "sdpa"}),
+                "cublas_ops": ("BOOLEAN", {"default": False, "tooltip": "Enable optimized cublas linear layers, speeds up decoding: https://github.com/aredden/torch-cublas-hgemm"}),
             }
         }
 
@@ -120,7 +121,7 @@ class Hy3DModelLoader:
     FUNCTION = "loadmodel"
     CATEGORY = "Hunyuan3DWrapper"
 
-    def loadmodel(self, model, compile_args=None, attention_mode="sdpa"):
+    def loadmodel(self, model, compile_args=None, attention_mode="sdpa", cublas_ops=False):
         device = mm.get_torch_device()
         offload_device=mm.unet_offload_device()
 
@@ -133,7 +134,8 @@ class Hy3DModelLoader:
             device=device, 
             offload_device=offload_device,
             compile_args=compile_args,
-            attention_mode=attention_mode)
+            attention_mode=attention_mode,
+            cublas_ops=cublas_ops)
         
         return (pipe, vae,)
 

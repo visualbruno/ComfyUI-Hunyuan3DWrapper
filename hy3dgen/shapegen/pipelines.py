@@ -154,6 +154,7 @@ class Hunyuan3DDiTPipeline:
         use_safetensors=None,
         compile_args=None,
         attention_mode="sdpa",
+        cublas_ops=False,
         **kwargs,
     ):
         # load config
@@ -188,6 +189,9 @@ class Hunyuan3DDiTPipeline:
             config['model']['params']['guidance_embed'] = True
         config['model']['params']['attention_mode'] = attention_mode
         config['vae']['params']['attention_mode'] = attention_mode
+
+        if cublas_ops:
+            config['vae']['params']['cublas_ops'] = True
         
         with init_empty_weights():
             model = instantiate_from_config(config['model'])
