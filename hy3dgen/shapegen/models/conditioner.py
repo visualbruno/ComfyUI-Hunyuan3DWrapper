@@ -43,6 +43,7 @@ class ImageEncoder(nn.Module):
         **kwargs,
     ):
         super().__init__()
+        self.has_guidance_embed = kwargs.get('has_guidance_embed', False)
 
         if config is None:
             self.model = self.MODEL_CLASS.from_pretrained(version)
@@ -78,7 +79,7 @@ class ImageEncoder(nn.Module):
             mask = mask.to(image)
             image = image * mask
         supported_sizes = [518, 530]
-        if image.shape[2] not in supported_sizes or image.shape[3] not in supported_sizes:
+        if (image.shape[2] not in supported_sizes or image.shape[3] not in supported_sizes) and not self.has_guidance_embed:
             print(f'Image shape {image.shape} not supported. Resizing to 518x518')
             inputs = self.transform(image)
         else:

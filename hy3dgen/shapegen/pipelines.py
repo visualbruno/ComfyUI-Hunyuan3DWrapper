@@ -187,6 +187,7 @@ class Hunyuan3DDiTPipeline:
         if "guidance_in.in_layer.bias" in ckpt['model']: #guidance_in.in_layer.bias
             logger.info("Model has guidance_in, setting guidance_embed to True")
             config['model']['params']['guidance_embed'] = True
+            config['conditioner']['params']['main_image_encoder']['kwargs']['has_guidance_embed'] = True
         config['model']['params']['attention_mode'] = attention_mode
         config['vae']['params']['attention_mode'] = attention_mode
 
