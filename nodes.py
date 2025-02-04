@@ -49,7 +49,7 @@ from accelerate.utils import set_module_tensor_to_device
 import folder_paths
 
 import comfy.model_management as mm
-from comfy.utils import load_torch_file, ProgressBar
+from comfy.utils import load_torch_file, ProgressBar, common_upscale
 
 script_directory = os.path.dirname(os.path.abspath(__file__))
 
@@ -232,6 +232,7 @@ class Hy3DDelightImage:
                 delight_pipe.scheduler = self.default_scheduler
 
         image = image.permute(0, 3, 1, 2).to(device)
+        image = common_upscale(image, width, height, "lanczos", "disabled")
 
         image = delight_pipe(
             prompt="",
