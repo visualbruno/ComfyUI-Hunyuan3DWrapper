@@ -224,7 +224,11 @@ class HunyuanPaintPipeline(StableDiffusionPipeline):
         ).images
 
         if not output_type == "latent":
-            image = self.vae.decode(latents / self.vae.config.scaling_factor, return_dict=False)[0]
+            image_list = []
+            for img in latents:
+                image = self.vae.decode(img.unsqueeze(0) / self.vae.config.scaling_factor, return_dict=False)[0]
+                image_list.append(image)
+            image = torch.cat(image_list, dim=0)
         else:
             image = latents
 
@@ -584,6 +588,7 @@ class HunyuanPaintPipeline(StableDiffusionPipeline):
         if not output_type == "latent":
             image_list = []
             for img in latents:
+                print("decoding image", img.shape)
                 image = self.vae.decode(img / self.vae.config.scaling_factor, return_dict=False, generator=generator)[0]
                 image_list.append(image)
             image = torch.cat(image_list, dim=0)
