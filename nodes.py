@@ -717,6 +717,7 @@ class Hy3DSampleMultiView:
     def process(self, pipeline, ref_image, normal_maps, position_maps, view_size, seed, steps, 
                 camera_config=None, scheduler=None, denoise_strength=1.0, samples=None):
         device = mm.get_torch_device()
+        mm.unload_all_models()
         mm.soft_empty_cache()
         torch.manual_seed(seed)
         generator=torch.Generator(device=pipeline.device).manual_seed(seed)
