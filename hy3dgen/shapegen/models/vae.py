@@ -629,7 +629,7 @@ class ShapeVAE(nn.Module):
         xyz_samples = torch.FloatTensor(xyz_samples)
 
         if mc_algo == 'odc':
-            from ....occupancy_dual_contouring import occupancy_dual_contouring
+            from ....ODC.occupancy_dual_contouring import occupancy_dual_contouring
             odc = occupancy_dual_contouring(device=device)
 
         # 2. latents to 3d volume
