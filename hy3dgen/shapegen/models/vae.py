@@ -628,30 +628,48 @@ class ShapeVAE(nn.Module):
         )
         xyz_samples = torch.FloatTensor(xyz_samples)
 
+        if mc_algo == 'odc':
+            from ....occupancy_dual_contouring import occupancy_dual_contouring
+            odc = occupancy_dual_contouring(device=device)
+
         # 2. latents to 3d volume
         batch_logits = []
         batch_size = latents.shape[0]
         comfy_pbar = ProgressBar(xyz_samples.shape[0])
         for start in tqdm(range(0, xyz_samples.shape[0], num_chunks),
                           desc=f"MC Level {mc_level} Implicit Function:"):
-            queries = xyz_samples[start: start + num_chunks, :].to(device)
-            queries = queries.half()
-            batch_queries = repeat(queries, "p c -> b p c", b=batch_size)
+            if mc_algo == 'odc':
+                imp_func = lambda xyz: torch.flatten(self.geo_decoder(repeat(xyz, "p c -> b p c", b=batch_size).to(latents.dtype), latents))
+                vertices, faces = odc.extract_mesh(imp_func, num_grid = octree_resolution, isolevel=mc_level, batch_size=num_chunks, min_coord=bbox_min, max_coord=bbox_max)
+                comfy_pbar.update(num_chunks)
+            else:
+                queries = xyz_samples[start: start + num_chunks, :].to(device)
+                queries = queries.half()
+                batch_queries = repeat(queries, "p c -> b p c", b=batch_size)
+                logits = self.geo_decoder(batch_queries.to(latents.dtype), latents)
+                if mc_level == -1:
+                    mc_level = 0
+                    logits = torch.sigmoid(logits) * 2 - 1
+                    print(f'Training with soft labels, inference with sigmoid and marching cubes level 0.')
+                batch_logits.append(logits)
+                comfy_pbar.update(num_chunks)
 
-            logits = self.geo_decoder(batch_queries.to(latents.dtype), latents)
-            if mc_level == -1:
-                mc_level = 0
-                logits = torch.sigmoid(logits) * 2 - 1
-                print(f'Training with soft labels, inference with sigmoid and marching cubes level 0.')
-            batch_logits.append(logits)
-            comfy_pbar.update(num_chunks)
-        grid_logits = torch.cat(batch_logits, dim=1)
-        grid_logits = grid_logits.view((batch_size, grid_size[0], grid_size[1], grid_size[2])).float()
+        if mc_algo == 'odc':
+            vertices = vertices.detach().cpu().numpy()
+            faces = faces.detach().cpu().numpy()
+            outputs = [
+                    Latent2MeshOutput(
+                        mesh_v=vertices.astype(np.float32),
+                        mesh_f=np.ascontiguousarray(faces)
+                    )]
+            return outputs
+        else:
+            grid_logits = torch.cat(batch_logits, dim=1)
+            grid_logits = grid_logits.view((batch_size, grid_size[0], grid_size[1], grid_size[2])).float()
 
-        # 3. extract surface
-        outputs = []
-        for i in range(batch_size):
-            try:
+            # 3. extract surface
+            outputs = []
+            for i in range(batch_size):
                 if mc_algo == 'mc':
                     vertices, faces, normals, _ = measure.marching_cubes(
                         grid_logits[i].cpu().numpy(),
@@ -712,8 +730,6 @@ class ShapeVAE(nn.Module):
                     else:
                         vertices = np.array([])
                         faces = np.array([])
-                else:
-                    raise ValueError(f"mc_algo {mc_algo} not supported.")
 
                 outputs.append(
                     Latent2MeshOutput(
@@ -722,12 +738,7 @@ class ShapeVAE(nn.Module):
                     )
                 )
 
-            except ValueError:
-                outputs.append(None)
-            except RuntimeError:
-                outputs.append(None)
-
-        return outputs
+            return outputs
     
 
 def create_cube_mesh(pos, size=1.0):

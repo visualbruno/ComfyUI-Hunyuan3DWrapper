@@ -1085,7 +1085,7 @@ class Hy3DVAEDecode:
                 "octree_resolution": ("INT", {"default": 384, "min": 64, "max": 4096, "step": 16}),
                 "num_chunks": ("INT", {"default": 8000, "min": 1, "max": 10000000, "step": 1, "tooltip": "Number of chunks to process at once, higher values use more memory, but make the process faster"}),
                 "mc_level": ("FLOAT", {"default": 0, "min": -1.0, "max": 1.0, "step": 0.0001}),
-                "mc_algo": (["mc", "dmc", "none"], {"default": "mc"}),
+                "mc_algo": (["mc", "dmc", "odc", "none"], {"default": "mc"}),
             },
         }
 
