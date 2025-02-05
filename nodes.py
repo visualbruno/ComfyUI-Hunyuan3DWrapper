@@ -1082,7 +1082,7 @@ class Hy3DVAEDecode:
                 "vae": ("HY3DVAE",),
                 "latents": ("HY3DLATENT", ),
                 "box_v": ("FLOAT", {"default": 1.01, "min": -10.0, "max": 10.0, "step": 0.001}),
-                "octree_resolution": ("INT", {"default": 384, "min": 64, "max": 4096, "step": 16}),
+                "octree_resolution": ("INT", {"default": 384, "min": 8, "max": 4096, "step": 8}),
                 "num_chunks": ("INT", {"default": 8000, "min": 1, "max": 10000000, "step": 1, "tooltip": "Number of chunks to process at once, higher values use more memory, but make the process faster"}),
                 "mc_level": ("FLOAT", {"default": 0, "min": -1.0, "max": 1.0, "step": 0.0001}),
                 "mc_algo": (["mc", "dmc", "odc", "none"], {"default": "mc"}),
