@@ -672,6 +672,46 @@ class ShapeVAE(nn.Module):
                     verts = center_vertices(verts)
                     vertices = verts.detach().cpu().numpy()
                     faces = faces.detach().cpu().numpy()[:, ::-1]
+                elif mc_algo == 'none':
+                    # Get binary voxel grid
+                    voxel_grid = grid_logits[i].cpu().numpy() > mc_level
+                    
+                    # Find surface voxels (those with at least one empty neighbor)
+                    padded = np.pad(voxel_grid, 1)
+                    surface_mask = np.zeros_like(voxel_grid, dtype=bool)
+                    
+                    for x in range(1, padded.shape[0]-1):
+                        for y in range(1, padded.shape[1]-1):
+                            for z in range(1, padded.shape[2]-1):
+                                if padded[x,y,z]:
+                                    # Check 6-connected neighbors
+                                    if not (padded[x-1,y,z] and padded[x+1,y,z] and
+                                        padded[x,y-1,z] and padded[x,y+1,z] and
+                                        padded[x,y,z-1] and padded[x,y,z+1]):
+                                        surface_mask[x-1,y-1,z-1] = True
+                    
+                    # Get surface voxel positions
+                    surface_positions = np.array(np.where(surface_mask)).T
+                    
+                    # Create mesh from surface voxels
+                    verts_list = []
+                    faces_list = []
+                    vsize = 1.0 / grid_size[0]  # Each voxel is 1/grid_size units
+                    
+                    for pos in surface_positions:
+                        v, f = create_cube_mesh(pos * vsize, size=vsize)  # Pass vsize as cube size
+                        f = f + len(verts_list) * 8  # 8 vertices per cube
+                        verts_list.append(v)
+                        faces_list.append(f)
+                    
+                    if len(verts_list) > 0:
+                        vertices = np.vstack(verts_list)
+                        faces = np.vstack(faces_list)
+                        # Scale to bbox
+                        vertices = vertices * bbox_size + bbox_min
+                    else:
+                        vertices = np.array([])
+                        faces = np.array([])
                 else:
                     raise ValueError(f"mc_algo {mc_algo} not supported.")
 
@@ -688,3 +728,22 @@ class ShapeVAE(nn.Module):
                 outputs.append(None)
 
         return outputs
+    
+
+def create_cube_mesh(pos, size=1.0):
+    # Vertices of a unit cube
+    v = np.array([
+        [0,0,0], [1,0,0], [1,1,0], [0,1,0],  # bottom vertices 0-3
+        [0,0,1], [1,0,1], [1,1,1], [0,1,1]   # top vertices 4-7
+    ]) * size + pos
+    
+    # Faces with inverted winding order
+    f = np.array([
+        [0,2,3], [0,1,2],  # bottom (-Y)
+        [4,6,5], [4,7,6],  # top (+Y)
+        [0,5,1], [0,4,5],  # front (-Z)
+        [2,7,3], [2,6,7],  # back (+Z)
+        [0,7,4], [0,3,7],  # left (-X)
+        [1,6,2], [1,5,6]   # right (+X)
+    ])
+    return v, f
