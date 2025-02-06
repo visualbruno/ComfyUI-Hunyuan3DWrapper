@@ -3,9 +3,12 @@ from torch.utils.cpp_extension import BuildExtension, CUDAExtension
 import torch
 
 torch_version = torch.__version__.split('+')[0].replace('.', '')
-cuda_version = torch.version.cuda.replace('.', '')
+if torch.version.cuda is not None:
+    cuda_version = "cuda"+torch.version.cuda.replace('.', '')
+elif getattr(torch.version, 'hip', None) is not None:
+    cuda_version = "rocm" + torch.version.hip.replace('.','')
 
-version = f"0.1.0+torch{torch_version}.cuda{cuda_version}"
+version = f"0.1.0+torch{torch_version}.{cuda_version}"
 # build custom rasterizer
 # build with `python setup.py install`
 # nvcc is needed
