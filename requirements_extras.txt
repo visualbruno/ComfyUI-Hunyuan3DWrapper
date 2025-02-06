@@ -5,3 +5,4 @@ nvdiffrast
 pynanoinstantmeshes
 #for fast decimation node
 pyfqmr
+diso
