@@ -54,7 +54,7 @@ For the mesh_processor extension the build command would be this:
 cd hy3dgen/texgen/differentiable_renderer
 python setup.py build_ext --inplace
 ```
-This file is supposed to be in that very folder. It is only used for the vertex inpainting, if this file doesn't exist the fallback is ran on cpu and is much slower. The vertex inpainting is on it's own node and in the worst case can just be bypassed, downside would be worse filling of the textures.
+This file is supposed to be in that very folder. It is only used for the vertex inpainting, if this file doesn't exist the fallback is run on cpu and is much slower. The vertex inpainting is on it's own node and in the worst case can just be bypassed, downside would be worse filling of the textures.
 
 Again, with portable you should use the embedded python to run the commands.
 
