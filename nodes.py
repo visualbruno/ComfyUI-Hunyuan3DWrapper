@@ -6,7 +6,7 @@ from PIL import Image
 from pathlib import Path
 import numpy as np
 import json
-import trimesh
+import trimesh as Trimesh
 from tqdm import tqdm
 
 from .hy3dgen.shapegen import Hunyuan3DDiTFlowMatchingPipeline, FaceReducer, FloaterRemover, DegenerateFaceRemover
@@ -1008,7 +1008,7 @@ class Hy3DUploadMesh:
         if path.endswith("\""):
             path = path[:-1]
         mesh_file = folder_paths.get_annotated_filepath(path)
-        loaded_mesh = trimesh.load(mesh_file, force="mesh")
+        loaded_mesh = Trimesh.load(mesh_file, force="mesh")
         
         return (loaded_mesh,)
 
@@ -1113,7 +1113,7 @@ class Hy3DVAEDecode:
         vae.to(offload_device)
 
         outputs.mesh_f = outputs.mesh_f[:, ::-1]
-        mesh_output = trimesh.Trimesh(outputs.mesh_v, outputs.mesh_f)
+        mesh_output = Trimesh.Trimesh(outputs.mesh_v, outputs.mesh_f)
         log.info(f"Decoded mesh with {mesh_output.vertices.shape[0]} vertices and {mesh_output.faces.shape[0]} faces")
         
         return (mesh_output, )
@@ -1149,7 +1149,7 @@ class Hy3DPostprocessMesh:
             new_mesh = FaceReducer()(new_mesh, max_facenum=max_facenum)
             log.info(f"Reduced faces, resulting in {new_mesh.vertices.shape[0]} vertices and {new_mesh.faces.shape[0]} faces")
         if smooth_normals:              
-            new_mesh.vertex_normals = trimesh.smoothing.get_vertices_normals(new_mesh)
+            new_mesh.vertex_normals = Trimesh.smoothing.get_vertices_normals(new_mesh)
 
         
         return (new_mesh, )
