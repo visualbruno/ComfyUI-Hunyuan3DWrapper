@@ -64,7 +64,7 @@ def intrinsics_to_projection(
     ret[3, 2] = 1.
     return ret
 
-def yaw_pitch_r_fov_to_extrinsics_intrinsics(yaws, pitchs, rs, fovs):
+def yaw_pitch_r_fov_to_extrinsics_intrinsics(yaws, pitchs, rs, fovs, aspect_ratio=1.0, pan_x=0.0, pan_y=0.0):
     import utils3d
     is_list = isinstance(yaws, list)
     if not is_list:
@@ -74,10 +74,17 @@ def yaw_pitch_r_fov_to_extrinsics_intrinsics(yaws, pitchs, rs, fovs):
         rs = [rs] * len(yaws)
     if not isinstance(fovs, list):
         fovs = [fovs] * len(yaws)
+
+    MIN_DISTANCE = 1e-6
+    rs = [max(r, MIN_DISTANCE) for r in rs]
+
     extrinsics = []
     intrinsics = []
     for yaw, pitch, r, fov in zip(yaws, pitchs, rs, fovs):
         fov = torch.deg2rad(torch.tensor(float(fov))).cuda()
+        fov_y = fov
+        fov_x = 2.0 * torch.atan(torch.tan(fov_y * 0.5) * aspect_ratio)
+        
         yaw = torch.tensor(float(yaw)).cuda()
         pitch = torch.tensor(float(pitch)).cuda()
         orig = torch.tensor([
@@ -85,8 +92,28 @@ def yaw_pitch_r_fov_to_extrinsics_intrinsics(yaws, pitchs, rs, fovs):
             torch.cos(yaw) * torch.cos(pitch),
             torch.sin(pitch),
         ]).cuda() * r
-        extr = utils3d.torch.extrinsics_look_at(orig, torch.tensor([0, 0, 0]).float().cuda(), torch.tensor([0, 0, 1]).float().cuda())
-        intr = utils3d.torch.intrinsics_from_fov_xy(fov, fov)
+
+        # Calculate camera right vector
+        right = torch.tensor([
+            torch.cos(yaw),
+            -torch.sin(yaw),
+            0.0
+        ]).cuda()
+
+        # Calculate camera up vector after pitch
+        up = torch.tensor([
+            torch.sin(yaw) * torch.sin(pitch),
+            torch.cos(yaw) * torch.sin(pitch),
+            -torch.cos(pitch)
+        ]).cuda()
+
+        # Apply panning in camera space
+        target = torch.tensor([0.0, 0.0, 0.0]).float().cuda()
+        target = target + right * pan_x + up * pan_y
+        up_vector = torch.tensor([0, 0, 1]).float().cuda()
+
+        extr = utils3d.torch.extrinsics_look_at(orig, target, up_vector)
+        intr = utils3d.torch.intrinsics_from_fov_xy(fov_x, fov_y)
         extrinsics.append(extr)
         intrinsics.append(intr)
     if not is_list:
