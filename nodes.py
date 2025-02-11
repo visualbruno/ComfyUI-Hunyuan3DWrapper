@@ -973,7 +973,7 @@ class Hy3DLoadMesh:
 
     def load(self, glb_path):
         
-        trimesh = trimesh.load(glb_path, force="mesh")
+        trimesh = Trimesh.load(glb_path, force="mesh")
         
         return (trimesh,)
 
