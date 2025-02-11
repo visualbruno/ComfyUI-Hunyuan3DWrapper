@@ -1266,7 +1266,7 @@ class Hy3DIMRemesh:
         if triangulate_result:
             new_faces = trimesh.geometry.triangulate_quads(new_faces)
 
-        new_mesh = trimesh.Trimesh(new_verts, new_faces)
+        new_mesh = Trimesh.Trimesh(new_verts, new_faces)
         
         return (new_mesh, )
     
