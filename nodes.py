@@ -563,7 +563,7 @@ class Hy3DRenderSingleView:
             bg = bg_color.view(1, 1, 3) * (1.0 - mask)
             final_image = masked_image + bg
         elif render_type == "depth":
-            depth = self.render.render_depth(
+            depth, mask = self.render.render_depth(
                 elevation,
                 azimuth,
                 camera_distance=camera_distance,
