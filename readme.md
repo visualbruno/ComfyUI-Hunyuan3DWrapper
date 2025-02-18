@@ -43,7 +43,8 @@ Rasterizer, to build and install:
 
 ```
 cd hy3dgen/texgen/custom_rasterizer
-python setup.py install
+python_embeded\python.exe setup.py install
+python_embeded\python.exe -m pip install .
 ```
 
 Or build with `python setup.py bdist_wheel` which creates the .whl file to the dist -subfolder, which you then would pip install to your python environment. 
@@ -52,7 +53,7 @@ End result needs to be `custom_rasterizer_kernel*.pyd` file and `custom_rasteriz
 For the mesh_processor extension the build command would be this:
 ```
 cd hy3dgen/texgen/differentiable_renderer
-python setup.py build_ext --inplace
+python_embeded\python.exe setup.py build_ext --inplace
 ```
 This file is supposed to be in that very folder. It is only used for the vertex inpainting, if this file doesn't exist the fallback is run on cpu and is much slower. The vertex inpainting is on it's own node and in the worst case can just be bypassed, downside would be worse filling of the textures.
 
