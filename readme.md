@@ -34,6 +34,15 @@ or with portable (in `ComfyUI_windows_portable` -folder):
 Current latest portable was updated to use pytorch 2.6.0, for this you should use new wheel:
 `python_embeded\python.exe -m pip install ComfyUI\custom_nodes\ComfyUI-Hunyuan3DWrapper\wheels\custom_rasterizer-0.1.0+torch260.cuda126-cp312-cp312-win_amd64.whl`
 
+# BPT
+`cd ComfyUI-Hunyuan3DWrapper-main\hy3dgen\shapegen\bpt`
+`python_embeded\python.exe -m pip install -r requirements.txt`
+
+Download weights <https://huggingface.co/whaohan/bpt/blob/refs%2Fpr%2F1/bpt-8-16-500m.pt>
+
+Download checkpoint <https://huggingface.co/Maikou/Michelangelo/blob/refs%2Fpr%2F2/checkpoints/aligned_shape_latents/shapevae-256.ckpt>
+
+Copy `bpt-8-16-500m.pt`, `shapevae-256.ckpt` to `ComfyUI-Hunyuan3DWrapper-main\hy3dgen\shapegen\bpt`
 
 This was tested to work on latest ComfyUI portable install
 
