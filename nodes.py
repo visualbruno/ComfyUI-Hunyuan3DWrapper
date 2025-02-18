@@ -1264,7 +1264,7 @@ class Hy3DIMRemesh:
             raise ValueError("Instant-meshes failed to remesh the mesh")
         new_verts = new_verts.astype(np.float32)
         if triangulate_result:
-            new_faces = trimesh.geometry.triangulate_quads(new_faces)
+            new_faces = Trimesh.geometry.triangulate_quads(new_faces)
 
         new_mesh = Trimesh.Trimesh(new_verts, new_faces)
         
