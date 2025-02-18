@@ -9,7 +9,7 @@ import json
 import trimesh as Trimesh
 from tqdm import tqdm
 
-from .hy3dgen.shapegen import Hunyuan3DDiTFlowMatchingPipeline, FaceReducer, FloaterRemover, DegenerateFaceRemover
+from .hy3dgen.shapegen import Hunyuan3DDiTFlowMatchingPipeline, BptMesh, FaceReducer, FloaterRemover, DegenerateFaceRemover
 from .hy3dgen.texgen.hunyuanpaint.unet.modules import UNet2DConditionModel, UNet2p5DConditionModel
 from .hy3dgen.texgen.hunyuanpaint.pipeline import HunyuanPaintPipeline
 
@@ -1117,7 +1117,7 @@ class Hy3DVAEDecode:
         log.info(f"Decoded mesh with {mesh_output.vertices.shape[0]} vertices and {mesh_output.faces.shape[0]} faces")
         
         return (mesh_output, )
-    
+
 class Hy3DPostprocessMesh:
     @classmethod
     def INPUT_TYPES(s):
@@ -1234,6 +1234,8 @@ class Hy3DIMRemesh:
                 "smooth_iter": ("INT", {"default": 8, "min": 0, "max": 100, "step": 1}),
                 "align_to_boundaries": ("BOOLEAN", {"default": True}),
                 "triangulate_result": ("BOOLEAN", {"default": True}),
+                "max_facenum": ("INT", {"default": 40000, "min": 1, "max": 10000000, "step": 1}),
+                "bpt": ("BOOLEAN", {"default": False}),
             },
         }
 
@@ -1243,7 +1245,7 @@ class Hy3DIMRemesh:
     CATEGORY = "Hunyuan3DWrapper"
     DESCRIPTION = "Remeshes the mesh using instant-meshes: https://github.com/wjakob/instant-meshes, Note: this will remove all vertex colors and textures."
 
-    def remesh(self, trimesh, merge_vertices, vertex_count, smooth_iter, align_to_boundaries, triangulate_result):
+    def remesh(self, trimesh, merge_vertices, vertex_count, smooth_iter, align_to_boundaries, triangulate_result, bpt, max_facenum):
         try:
             import pynanoinstantmeshes as PyNIM
         except ImportError:
@@ -1265,11 +1267,15 @@ class Hy3DIMRemesh:
         new_verts = new_verts.astype(np.float32)
         if triangulate_result:
             new_faces = Trimesh.geometry.triangulate_quads(new_faces)
+        
+        if len(new_mesh.faces) > max_facenum:
+            new_mesh = FaceReducer()(new_mesh, max_facenum=max_facenum)
 
-        new_mesh = Trimesh.Trimesh(new_verts, new_faces)
+        if bpt:
+            new_mesh = BptMesh()(new_mesh)
         
         return (new_mesh, )
-    
+        
 class Hy3DGetMeshPBRTextures:
     @classmethod
     def INPUT_TYPES(s):
