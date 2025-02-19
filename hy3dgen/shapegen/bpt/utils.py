@@ -66,15 +66,14 @@ def apply_normalize(mesh):
 
 
 
-def sample_pc(mesh, pc_num, with_normal=False, seed=1234):
+def sample_pc(mesh, pc_num, with_normal=False, seed=1234, samples=50000):
     mesh = apply_normalize(mesh)
     
     if not with_normal:
         points, _ = mesh.sample(pc_num, return_index=True)
         return points
 
-    points, face_idx = trimesh.sample.sample_surface(mesh=mesh, count=50000, seed=seed)
-
+    points, face_idx = trimesh.sample.sample_surface(mesh=mesh, count=samples, seed=seed)
     #points, face_idx = mesh.sample(50000, return_index=True)
     normals = mesh.face_normals[face_idx]
     pc_normal = np.concatenate([points, normals], axis=-1, dtype=np.float16)
