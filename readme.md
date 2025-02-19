@@ -14,6 +14,8 @@ Copy `bpt-8-16-500m.pt` to `ComfyUI-Hunyuan3DWrapper-main\hy3dgen\shapegen\bpt`
 
 `cd .\xatlas-python\`
 
+copy `https://github.com/mworchel/xatlas-python.git` into `xatlas-python\extern\xatlas` and back to `xatlas_python`
+
 `..\python_embeded\python.exe setup.py install`
 
 `..\python_embeded\python.exe -m pip install .`
