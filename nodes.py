@@ -1426,6 +1426,7 @@ class Hy3DExportMesh:
     RETURN_NAMES = ("glb_path",)
     FUNCTION = "process"
     CATEGORY = "Hunyuan3DWrapper"
+    OUTPUT_NODE = True
 
     def process(self, trimesh, filename_prefix, file_format, save_file=True):
         full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path(filename_prefix, folder_paths.get_output_directory())
