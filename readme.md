@@ -7,6 +7,17 @@ Download weights <https://huggingface.co/whaohan/bpt/blob/refs%2Fpr%2F1/bpt-8-16
 
 Copy `bpt-8-16-500m.pt` to `ComfyUI-Hunyuan3DWrapper-main\hy3dgen\shapegen\bpt`
 
+# Xatlas Upgrade procedure
+`python_embeded\python.exe -m pip uninstall xatlas`
+
+`git clone --recursive https://github.com/mworchel/xatlas-python.git`
+
+`cd .\xatlas-python\`
+
+`..\python_embeded\python.exe setup.py install`
+
+`..\python_embeded\python.exe -m pip install .`
+
 # ComfyUI wrapper for [Hunyuan3D-2](https://github.com/Tencent/Hunyuan3D-2)
 
 # WORK IN PROGRESS
