@@ -1,5 +1,6 @@
 # Added BPT
 `cd ComfyUI-Hunyuan3DWrapper-main\hy3dgen\shapegen\bpt`
+
 `python_embeded\python.exe -m pip install -r requirements.txt`
 
 Download weights <https://huggingface.co/whaohan/bpt/blob/refs%2Fpr%2F1/bpt-8-16-500m.pt>
