@@ -1279,9 +1279,9 @@ class Hy3DBPT:
             "required": {
                 "trimesh": ("TRIMESH",),
                 "enable_bpt": ("BOOLEAN", {"default": True}),
+                "seed": ("INT", {"default": 42, "min": 0, "max": 0xffffffffffffffff}),
                 "temperature": ("FLOAT", {"default": 0.5}),
                 "pc_num": ("INT", {"default": 4096, "min": 1024, "max": 8192, "step": 1024}),
-                "verbose": ("BOOLEAN", {"default": False})
             },
         }
 
@@ -1291,12 +1291,12 @@ class Hy3DBPT:
     CATEGORY = "Hunyuan3DWrapper"
     DESCRIPTION = "BPT the mesh using bpt: https://github.com/whaohan/bpt"
     
-    def bpt(self, trimesh, enable_bpt, temperature, pc_num, verbose):
+    def bpt(self, trimesh, enable_bpt, temperature, pc_num, seed):
 
         new_mesh = trimesh.copy()
         if enable_bpt:
             from .hy3dgen.shapegen.postprocessors import BptMesh
-            new_mesh = BptMesh()(new_mesh, with_normal=True, temperature=temperature, batch_size=1, pc_num=pc_num, verbose=verbose)
+            new_mesh = BptMesh()(new_mesh, with_normal=True, temperature=temperature, batch_size=1, pc_num=pc_num, verbose=False, seed=seed)
             mm.unload_all_models()
             mm.soft_empty_cache()
 
