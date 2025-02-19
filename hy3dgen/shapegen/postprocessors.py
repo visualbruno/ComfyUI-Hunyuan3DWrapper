@@ -164,7 +164,7 @@ def bpt_remesh(self, mesh: trimesh.Trimesh, verbose: bool = False, with_normal: 
         from .bpt.model.serializaiton import BPT_deserialize
         from .bpt.utils import sample_pc, joint_filter
 
-        pc_normal = sample_pc(mesh, with_normal=with_normal)
+        pc_normal = sample_pc(mesh, pc_num=8192, with_normal=with_normal)
 
         pc_normal = pc_normal[None, :, :] if len(pc_normal.shape) == 2 else pc_normal
 
