@@ -1281,9 +1281,7 @@ class Hy3DBPT:
                 "enable_bpt": ("BOOLEAN", {"default": True}),
                 "temperature": ("FLOAT", {"default": 0.5}),
                 "batch_size": ("INT", {"default": 1}),
-                "kwarg_k": ("INT", {"default": 50}),
-                "kwarg_p": ("FLOAT", {"default": 0.95}),
-                
+                "with_normal": ("BOOLEAN", {"default": True})
             },
         }
 
@@ -1293,11 +1291,11 @@ class Hy3DBPT:
     CATEGORY = "Hunyuan3DWrapper"
     DESCRIPTION = "BPT the mesh using bpt: https://github.com/whaohan/bpt"
 
-    def bpt(self, trimesh, enable_bpt, kwarg_k, kwarg_p, temperature, batch_size):
+    def bpt(self, trimesh, enable_bpt, with_normal, temperature, batch_size):
         new_mesh = trimesh.copy()
 
         if enable_bpt:
-            new_mesh = BptMesh()(new_mesh, max_seq_len=10000, cond_dim=768, kwarg_k=kwarg_k, kwarg_p=kwarg_p, temperature=temperature, batch_size=batch_size)
+            new_mesh = BptMesh()(new_mesh, with_normal=with_normal, temperature=temperature, batch_size=batch_size)
             
         mm.unload_all_models()
         mm.soft_empty_cache()
