@@ -6,9 +6,12 @@ import torch
 import torch.distributed as dist
 
 import sys
-sys.path.append(r"C:\Remade\ComfyUI_windows_portable\ComfyUI\custom_nodes\ComfyUI-Hunyuan3DWrapper-main")
+import os
+custom_node_path = os.path.dirname(os.path.abspath(__file__))
+custom_node_path = os.path.abspath(os.path.join(custom_node_path, "..", "..", "..", "..", "..",".."))
+sys.path.append(custom_node_path)
 
-from hy3dgen.shapegen.bpt.miche.michelangelo.models.tsal import asl_pl_module
+#from hy3dgen.shapegen.bpt.miche.michelangelo.models.tsal import asl_pl_module
 
 def get_obj_from_str(string, reload=False):
     module, cls = string.rsplit(".", 1)
@@ -26,6 +29,10 @@ def get_obj_from_config(config):
 
 
 def instantiate_from_config(config, **kwargs):
+
+    print(" custom path :")
+    print(custom_node_path)
+    print("\n")
     if "target" not in config:
         raise KeyError("Expected key `target` to instantiate.")
 
