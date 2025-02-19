@@ -158,13 +158,13 @@ def import_mesh(mesh: Union[pymeshlab.MeshSet, trimesh.Trimesh, Latent2MeshOutpu
 
     return mesh
 
-def bpt_remesh(self, mesh: trimesh.Trimesh, verbose: bool = False, with_normal: bool = True, temperature: float = 0.5, batch_size: int = 1, pc_num: int = 4096, seed: int = 1234):
+def bpt_remesh(self, mesh: trimesh.Trimesh, verbose: bool = False, with_normal: bool = True, temperature: float = 0.5, batch_size: int = 1, pc_num: int = 4096, seed: int = 1234, samples: int = 50000):
         from .bpt.model import data_utils
         from .bpt.model.model import MeshTransformer
         from .bpt.model.serializaiton import BPT_deserialize
         from .bpt.utils import sample_pc, joint_filter
 
-        pc_normal = sample_pc(mesh, pc_num=pc_num, with_normal=with_normal, seed=seed)
+        pc_normal = sample_pc(mesh, pc_num=pc_num, with_normal=with_normal, seed=seed, samples=samples)
 
         pc_normal = pc_normal[None, :, :] if len(pc_normal.shape) == 2 else pc_normal
 
@@ -232,9 +232,10 @@ class BptMesh:
         with_normal: bool = True,
         verbose: bool = False,
         pc_num: int = 4096,
-        seed: int = 1234
+        seed: int = 1234,
+        samples: int = 50000
     ) -> Union[pymeshlab.MeshSet, trimesh.Trimesh]:
-        mesh = bpt_remesh(self, mesh=mesh, temperature=temperature, batch_size=batch_size, with_normal=with_normal, pc_num=pc_num, seed=seed)
+        mesh = bpt_remesh(self, mesh=mesh, temperature=temperature, batch_size=batch_size, with_normal=with_normal, pc_num=pc_num, seed=seed, samples=samples)
         return mesh
 
 class FaceReducer:
