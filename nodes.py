@@ -9,7 +9,7 @@ import json
 import trimesh as Trimesh
 from tqdm import tqdm
 
-from .hy3dgen.shapegen import Hunyuan3DDiTFlowMatchingPipeline, BptMesh, FaceReducer, FloaterRemover, DegenerateFaceRemover
+from .hy3dgen.shapegen import Hunyuan3DDiTFlowMatchingPipeline, FaceReducer, FloaterRemover, DegenerateFaceRemover
 from .hy3dgen.texgen.hunyuanpaint.unet.modules import UNet2DConditionModel, UNet2p5DConditionModel
 from .hy3dgen.texgen.hunyuanpaint.pipeline import HunyuanPaintPipeline
 
@@ -1292,6 +1292,7 @@ class Hy3DBPT:
     DESCRIPTION = "BPT the mesh using bpt: https://github.com/whaohan/bpt"
 
     def bpt(self, trimesh, enable_bpt, with_normal, temperature, batch_size):
+        from .hy3dgen.shapegen import BptMesh
         new_mesh = trimesh.copy()
 
         if enable_bpt:
