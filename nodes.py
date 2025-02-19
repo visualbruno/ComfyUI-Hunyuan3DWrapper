@@ -1280,7 +1280,6 @@ class Hy3DBPT:
                 "trimesh": ("TRIMESH",),
                 "enable_bpt": ("BOOLEAN", {"default": True}),
                 "temperature": ("FLOAT", {"default": 0.5}),
-                "batch_size": ("INT", {"default": 1}),
             },
         }
 
@@ -1290,12 +1289,12 @@ class Hy3DBPT:
     CATEGORY = "Hunyuan3DWrapper"
     DESCRIPTION = "BPT the mesh using bpt: https://github.com/whaohan/bpt"
     
-    def bpt(self, trimesh, enable_bpt, temperature, batch_size):
+    def bpt(self, trimesh, enable_bpt, temperature):
 
         new_mesh = trimesh.copy()
         if enable_bpt:
             from .hy3dgen.shapegen.postprocessors import BptMesh
-            new_mesh = BptMesh()(new_mesh, with_normal=True, temperature=temperature, batch_size=batch_size)
+            new_mesh = BptMesh()(new_mesh, with_normal=True, temperature=temperature, batch_size=1)
             mm.unload_all_models()
             mm.soft_empty_cache()
 
