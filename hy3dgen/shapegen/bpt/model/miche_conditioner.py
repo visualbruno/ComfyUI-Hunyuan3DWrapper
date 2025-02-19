@@ -32,8 +32,8 @@ class PointConditioner(torch.nn.Module):
 
         # open-source version of miche
         if model_name == 'miche-256-feature':
-            ckpt_path = None
             dir = os.path.dirname(os.path.abspath(__file__)) 
+            ckpt_path = None#os.path.join(dir, '..\shapevae-256.ckpt')
             model_path = os.path.join(dir, '..\shapevae-256.yaml')
             config_path = model_path
 

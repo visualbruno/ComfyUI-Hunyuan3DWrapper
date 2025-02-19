@@ -70,6 +70,7 @@ class MeshTransformer(Module):
         conditioned_on_pc = True,
         encoder_name = 'miche-256-feature',
         encoder_freeze = False,
+        cond_dim = 768
     ):
         super().__init__()
 
@@ -107,7 +108,7 @@ class MeshTransformer(Module):
         # load point_cloud encoder
         if conditioned_on_pc:
             print(f'Point cloud encoder: {encoder_name} | freeze: {encoder_freeze}')
-            self.conditioner = PointConditioner(model_name=encoder_name, freeze=encoder_freeze)
+            self.conditioner = PointConditioner(cond_dim=cond_dim, model_name=encoder_name, freeze=encoder_freeze)
             cross_attn_dim_context = self.conditioner.dim_latent
         else:
             raise NotImplementedError
