@@ -1235,7 +1235,6 @@ class Hy3DIMRemesh:
                 "align_to_boundaries": ("BOOLEAN", {"default": True}),
                 "triangulate_result": ("BOOLEAN", {"default": True}),
                 "max_facenum": ("INT", {"default": 40000, "min": 1, "max": 10000000, "step": 1}),
-                "bpt": ("BOOLEAN", {"default": False}),
             },
         }
 
@@ -1245,7 +1244,7 @@ class Hy3DIMRemesh:
     CATEGORY = "Hunyuan3DWrapper"
     DESCRIPTION = "Remeshes the mesh using instant-meshes: https://github.com/wjakob/instant-meshes, Note: this will remove all vertex colors and textures."
 
-    def remesh(self, trimesh, merge_vertices, vertex_count, smooth_iter, align_to_boundaries, triangulate_result, bpt, max_facenum):
+    def remesh(self, trimesh, merge_vertices, vertex_count, smooth_iter, align_to_boundaries, triangulate_result, max_facenum):
         try:
             import pynanoinstantmeshes as PyNIM
         except ImportError:
@@ -1271,11 +1270,38 @@ class Hy3DIMRemesh:
         if len(new_mesh.faces) > max_facenum:
             new_mesh = FaceReducer()(new_mesh, max_facenum=max_facenum)
 
-        if bpt:
-            new_mesh = BptMesh()(new_mesh)
-        
         return (new_mesh, )
-        
+    
+class Hy3DBPT:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "trimesh": ("TRIMESH",),
+                "enable_bpt": ("BOOLEAN", {"default": True}),
+                "cond_dim": ("INT", {"default": 768}),
+                "max_seq_len": ("INT", {"default": 10000}),
+                "kwarg_k": ("INT", {"default": 50}),
+                "kwarg_p": ("FLOAT", {"default": 0.95}),
+            },
+        }
+
+    RETURN_TYPES = ("TRIMESH",)
+    RETURN_NAMES = ("trimesh",)
+    FUNCTION = "bpt"
+    CATEGORY = "Hunyuan3DWrapper"
+    DESCRIPTION = "BPT the mesh using bpt: https://github.com/whaohan/bpt"
+
+    def bpt(self, trimesh, enable_bpt, cond_dim, max_seq_len, kwarg_k, kwarg_p):
+        new_mesh = trimesh.copy()
+
+        if enable_bpt:
+            new_mesh = BptMesh()(new_mesh, max_seq_len=max_seq_len, cond_dim=cond_dim, kwarg_k=kwarg_k, kwarg_p=kwarg_p)
+            
+        mm.unload_all_models()
+        mm.soft_empty_cache()
+        return (new_mesh, )
+            
 class Hy3DGetMeshPBRTextures:
     @classmethod
     def INPUT_TYPES(s):
@@ -1591,6 +1617,7 @@ NODE_CLASS_MAPPINGS = {
     "Hy3DRenderSingleView": Hy3DRenderSingleView,
     "Hy3DDiffusersSchedulerConfig": Hy3DDiffusersSchedulerConfig,
     "Hy3DIMRemesh": Hy3DIMRemesh,
+    "Hy3DBPT": Hy3DBPT,
     "Hy3DMeshInfo": Hy3DMeshInfo,
     "Hy3DFastSimplifyMesh": Hy3DFastSimplifyMesh,
     "Hy3DNvdiffrastRenderer": Hy3DNvdiffrastRenderer
@@ -1622,6 +1649,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "Hy3DRenderSingleView": "Hy3D Render SingleView",
     "Hy3DDiffusersSchedulerConfig": "Hy3D Diffusers Scheduler Config",
     "Hy3DIMRemesh": "Hy3D Instant-Meshes Remesh",
+    "Hy3DBPT": "Hy3D BPT",
     "Hy3DMeshInfo": "Hy3D Mesh Info",
     "Hy3DFastSimplifyMesh": "Hy3D Fast Simplify Mesh",
     "Hy3DNvdiffrastRenderer": "Hy3D Nvdiffrast Renderer"
