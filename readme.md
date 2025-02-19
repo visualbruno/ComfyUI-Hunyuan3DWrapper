@@ -4,9 +4,7 @@
 
 Download weights <https://huggingface.co/whaohan/bpt/blob/refs%2Fpr%2F1/bpt-8-16-500m.pt>
 
-Download checkpoint <https://huggingface.co/Maikou/Michelangelo/blob/refs%2Fpr%2F2/checkpoints/aligned_shape_latents/shapevae-256.ckpt>
-
-Copy `bpt-8-16-500m.pt`, `shapevae-256.ckpt` to `ComfyUI-Hunyuan3DWrapper-main\hy3dgen\shapegen\bpt`
+Copy `bpt-8-16-500m.pt` to `ComfyUI-Hunyuan3DWrapper-main\hy3dgen\shapegen\bpt`
 
 # ComfyUI wrapper for [Hunyuan3D-2](https://github.com/Tencent/Hunyuan3D-2)
 
