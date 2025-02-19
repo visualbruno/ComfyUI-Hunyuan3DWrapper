@@ -75,7 +75,7 @@ Again, with portable you should use the embedded python to run the commands.
 
 # Update:
 
-## Added BPT
+## Added [BPT](https://github.com/whaohan/bpt)
 
 **This has some hefty requirements, fully optional, install at your own discretion**
 ```
