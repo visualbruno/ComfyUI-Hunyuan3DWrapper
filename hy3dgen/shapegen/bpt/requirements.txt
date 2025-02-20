@@ -29,3 +29,4 @@ numpy
 point-cloud-utils
 transformers==4.48.0
 networkx==3.4.2
+deepspeed==0.16.3
