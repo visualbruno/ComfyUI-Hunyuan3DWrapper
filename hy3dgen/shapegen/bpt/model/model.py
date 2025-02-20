@@ -226,7 +226,7 @@ class MeshTransformer(Module):
                     break
                 
         # Ensure progress bar reaches 100% when loop completes
-        pbar.complete()
+        #pbar.complete()
 
         # mask out to padding anything after the first eos
 
