@@ -1293,7 +1293,8 @@ class Hy3DBPT:
     DESCRIPTION = "BPT the mesh using bpt: https://github.com/whaohan/bpt"
     
     def bpt(self, trimesh, enable_bpt, temperature, pc_num, seed, samples):
-
+        mm.unload_all_models()
+        mm.soft_empty_cache()
         new_mesh = trimesh.copy()
         if enable_bpt:
             from .hy3dgen.shapegen.postprocessors import BptMesh
