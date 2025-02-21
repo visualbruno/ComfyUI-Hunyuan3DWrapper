@@ -105,7 +105,7 @@ in the portable root folder:
 
 `git clone --recursive https://github.com/mworchel/xatlas-python.git`
 
-`cd .\xatlas-python\xtern`
+`cd .\xatlas-python\extern`
 
 delete `xatlas` folder 
 
