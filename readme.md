@@ -107,7 +107,7 @@ in the portable root folder:
 
 `cd .\xatlas-python\`
 
-copy `https://github.com/mworchel/xatlas-python.git` into `xatlas-python\extern\xatlas` and back to `xatlas_python`
+copy `https://github.com/mifth/xatlas_fixes` into `xatlas-python\extern\xatlas` and back to `xatlas_python`
 
 `..\python_embeded\python.exe setup.py install`
 
