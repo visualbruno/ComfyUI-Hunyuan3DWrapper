@@ -105,12 +105,20 @@ in the portable root folder:
 
 `git clone --recursive https://github.com/mworchel/xatlas-python.git`
 
-`cd .\xatlas-python\`
+`cd .\xatlas-python\xtern`
 
-copy `https://github.com/mifth/xatlas_fixes` into `xatlas-python\extern\xatlas` and back to `xatlas_python`
+delete `xatlas` folder 
 
-`..\python_embeded\python.exe setup.py install`
+`git clone --recursive https://github.com/jpcy/xatlas`
 
-`..\python_embeded\python.exe -m pip install .`
+in `xatlas-python\extern\xatlas\source\xatlas` modify `xatlas.cpp`
+
+change line 6774: `#if 0` to `//#if 0`
+
+change line 6778: `#endif` to `//#endif`
+
+Finally go back to portable root folder:
+
+`.\python_embeded\python.exe -m pip install .\xatlas-python\`
 
 ---
