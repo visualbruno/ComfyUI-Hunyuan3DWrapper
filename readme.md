@@ -101,7 +101,7 @@ Copy `bpt-8-16-500m.pt` to `ComfyUI-Hunyuan3DWrapper-main\hy3dgen\shapegen\bpt`
 
 `python_embeded\python.exe -m pip uninstall xatlas`
 
-in the portable root folder:
+in the portable root folder (`ComfyUI_windows_portable`):
 
 `git clone --recursive https://github.com/mworchel/xatlas-python.git`
 
@@ -117,7 +117,7 @@ change line 6774: `#if 0` to `//#if 0`
 
 change line 6778: `#endif` to `//#endif`
 
-Finally go back to portable root folder:
+Finally go back to portable root (`ComfyUI_windows_portable`) folder:
 
 `.\python_embeded\python.exe -m pip install .\xatlas-python\`
 
