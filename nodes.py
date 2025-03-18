@@ -222,7 +222,7 @@ class Hy3DDelightImage:
 
         device = mm.get_torch_device()
         offload_device = mm.unet_offload_device()
-
+        print("image in shape", image.shape)
         if scheduler is not None:
             if not hasattr(self, "default_scheduler"):
                 self.default_scheduler = delight_pipe.scheduler
@@ -233,21 +233,25 @@ class Hy3DDelightImage:
 
         image = image.permute(0, 3, 1, 2).to(device)
         image = common_upscale(image, width, height, "lanczos", "disabled")
+        
 
-        image = delight_pipe(
-            prompt="",
-            image=image,
-            generator=torch.manual_seed(seed),
-            height=height,
-            width=width,
-            num_inference_steps=steps,
-            image_guidance_scale=cfg_image,
-            guidance_scale=1.0 if cfg_image == 1.0 else 1.01, #enable cfg for image, value doesn't matter as it do anything for text anyway
-            output_type="pt",
-            
-        ).images[0]
+        images_list = []
+        for img in image:
+            out = delight_pipe(
+                prompt="",
+                image=img,
+                generator=torch.manual_seed(seed),
+                height=height,
+                width=width,
+                num_inference_steps=steps,
+                image_guidance_scale=cfg_image,
+                guidance_scale=1.0 if cfg_image == 1.0 else 1.01, #enable cfg for image, value doesn't matter as it do anything for text anyway
+                output_type="pt",
+                
+            ).images[0]
+            images_list.append(out)
 
-        out_tensor = image.unsqueeze(0).permute(0, 2, 3, 1).cpu().float()
+        out_tensor = torch.stack(images_list).permute(0, 2, 3, 1).cpu().float()
         
         return (out_tensor, )
     
@@ -1092,8 +1096,8 @@ class Hy3DGenerateMeshMultiView(Hy3DGenerateMesh):
             }
         }
 
-    RETURN_TYPES = ("HY3DLATENT",)
-    RETURN_NAMES = ("latents",)
+    RETURN_TYPES = ("HY3DLATENT", "IMAGE", "MASK",)
+    RETURN_NAMES = ("latents", "image", "mask")
     FUNCTION = "process"
     CATEGORY = "Hunyuan3DWrapper"
 
@@ -1141,10 +1145,24 @@ class Hy3DGenerateMeshMultiView(Hy3DGenerateMesh):
             torch.cuda.reset_peak_memory_stats(device)
         except:
             pass
+        
+        images = []
+        masks = []
+        for view_tag, view_image in view_dict.items():
+            if view_image is not None:
+                if view_image.shape[1] == 4:
+                    rgb = view_image[:, :3, :, :]
+                    alpha = view_image[:, 3:4, :, :]
+                    mask = alpha
+                    masks.append(mask)
+                images.append(rgb)
+
+        image_tensors = torch.cat(images, 0).permute(0, 2, 3, 1).cpu().float()
+        mask_tensors = torch.cat(masks, 0).squeeze(1).cpu().float()
 
         pipeline.to(offload_device)
         
-        return (latents, )
+        return (latents, image_tensors, mask_tensors)
     
 class Hy3DVAEDecode:
     @classmethod
