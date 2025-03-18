@@ -84,7 +84,7 @@ class Hy3DTorchCompileSettings:
     RETURN_TYPES = ("HY3DCOMPILEARGS",)
     RETURN_NAMES = ("torch_compile_args",)
     FUNCTION = "loadmodel"
-    CATEGORY = "HunyuanVideoWrapper"
+    CATEGORY = "Hunyuan3DWrapper"
     DESCRIPTION = "torch.compile settings, when connected to the model loader, torch.compile of the selected layers is attempted. Requires Triton and torch 2.5.0 is recommended"
 
     def loadmodel(self, backend, fullgraph, mode, dynamic, dynamo_cache_size_limit, compile_transformer, compile_vae):
@@ -1034,7 +1034,7 @@ class Hy3DGenerateMesh:
     FUNCTION = "process"
     CATEGORY = "Hunyuan3DWrapper"
 
-    def process(self, pipeline, image, steps, guidance_scale, seed, mask=None):
+    def process(self, pipeline, image, steps, guidance_scale, seed, mask=None, front=None, back=None, left=None, right=None):
 
         mm.unload_all_models()
         mm.soft_empty_cache()
@@ -1046,7 +1046,7 @@ class Hy3DGenerateMesh:
         image = image * 2 - 1
 
         if mask is not None:
-            mask = mask.unsqueeze(0).to(device)
+            mask = mask.unsqueeze(1).repeat(1, 3, 1, 1).to(device)
             if mask.shape[2] != image.shape[2] or mask.shape[3] != image.shape[3]:
                 mask = F.interpolate(mask, size=(image.shape[2], image.shape[3]), mode='nearest')
 
@@ -1063,6 +1063,78 @@ class Hy3DGenerateMesh:
             num_inference_steps=steps, 
             guidance_scale=guidance_scale,
             generator=torch.manual_seed(seed))
+
+        print_memory(device)
+        try:
+            torch.cuda.reset_peak_memory_stats(device)
+        except:
+            pass
+
+        pipeline.to(offload_device)
+        
+        return (latents, )
+    
+class Hy3DGenerateMeshMultiView(Hy3DGenerateMesh):
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "pipeline": ("HY3DMODEL",),
+                "guidance_scale": ("FLOAT", {"default": 5.5, "min": 0.0, "max": 100.0, "step": 0.01}),
+                "steps": ("INT", {"default": 30, "min": 1}),
+                "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
+            },
+            "optional": {
+                "front": ("IMAGE", ),
+                "left": ("IMAGE", ),
+                "right": ("IMAGE", ),
+                "back": ("IMAGE", ),                
+            }
+        }
+
+    RETURN_TYPES = ("HY3DLATENT",)
+    RETURN_NAMES = ("latents",)
+    FUNCTION = "process"
+    CATEGORY = "Hunyuan3DWrapper"
+
+    def process(self, pipeline, steps, guidance_scale, seed, mask=None, front=None, back=None, left=None, right=None):
+
+        mm.unload_all_models()
+        mm.soft_empty_cache()
+
+        device = mm.get_torch_device()
+        offload_device = mm.unet_offload_device()
+
+        pipeline.to(device)
+
+        if front is not None:
+            front = front.clone().permute(0, 3, 1, 2).to(device)
+        if back is not None:
+            back = back.clone().permute(0, 3, 1, 2).to(device)
+        if left is not None:
+            left = left.clone().permute(0, 3, 1, 2).to(device)
+        if right is not None:
+            right = right.clone().permute(0, 3, 1, 2).to(device)
+            
+        view_dict = {
+            'front': front,
+            'left': left,
+            'right': right,
+            'back': back
+        }
+
+        try:
+            torch.cuda.reset_peak_memory_stats(device)
+        except:
+            pass
+
+        latents = pipeline(
+            image=None, 
+            mask=mask,
+            num_inference_steps=steps, 
+            guidance_scale=guidance_scale,
+            generator=torch.manual_seed(seed),
+            view_dict=view_dict)
 
         print_memory(device)
         try:
@@ -1596,6 +1668,7 @@ class Hy3DNvdiffrastRenderer:
 NODE_CLASS_MAPPINGS = {
     "Hy3DModelLoader": Hy3DModelLoader,
     "Hy3DGenerateMesh": Hy3DGenerateMesh,
+    "Hy3DGenerateMeshMultiView": Hy3DGenerateMeshMultiView,
     "Hy3DExportMesh": Hy3DExportMesh,
     "DownloadAndLoadHy3DDelightModel": DownloadAndLoadHy3DDelightModel,
     "DownloadAndLoadHy3DPaintModel": DownloadAndLoadHy3DPaintModel,
@@ -1628,6 +1701,7 @@ NODE_CLASS_MAPPINGS = {
 NODE_DISPLAY_NAME_MAPPINGS = {
     "Hy3DModelLoader": "Hy3DModelLoader",
     "Hy3DGenerateMesh": "Hy3DGenerateMesh",
+    "Hy3DGenerateMeshMultiView": "Hy3DGenerateMeshMultiView",
     "Hy3DExportMesh": "Hy3DExportMesh",
     "DownloadAndLoadHy3DDelightModel": "(Down)Load Hy3D DelightModel",
     "DownloadAndLoadHy3DPaintModel": "(Down)Load Hy3D PaintModel",

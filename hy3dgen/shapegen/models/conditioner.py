@@ -22,6 +22,7 @@
 # fine-tuning enabling code and other elements of the foregoing made publicly available
 # by Tencent in accordance with TENCENT HUNYUAN COMMUNITY LICENSE AGREEMENT.
 
+import numpy as np
 import torch
 import torch.nn as nn
 from torchvision import transforms
@@ -31,6 +32,26 @@ from transformers import (
     Dinov2Model,
     Dinov2Config,
 )
+from ....utils import log
+
+def get_1d_sincos_pos_embed_from_grid(embed_dim, pos):
+    """
+    embed_dim: output dimension for each position
+    pos: a list of positions to be encoded: size (M,)
+    out: (M, D)
+    """
+    assert embed_dim % 2 == 0
+    omega = np.arange(embed_dim // 2, dtype=np.float64)
+    omega /= embed_dim / 2.
+    omega = 1. / 10000 ** omega  # (D/2,)
+
+    pos = pos.reshape(-1)  # (M,)
+    out = np.einsum('m,d->md', pos, omega)  # (M, D/2), outer product
+
+    emb_sin = np.sin(out)  # (M, D/2)
+    emb_cos = np.cos(out)  # (M, D/2)
+
+    return np.concatenate([emb_sin, emb_cos], axis=1)
 
 
 class ImageEncoder(nn.Module):
@@ -68,36 +89,94 @@ class ImageEncoder(nn.Module):
             ]
         )
 
-    def forward(self, image, mask=None, value_range=(-1, 1)):
-        if value_range is not None:
-            low, high = value_range
-            image = (image - low) / (high - low)
-
-        image = image.to(self.model.device, dtype=self.model.dtype)
+        #MV
+        self.view_num = 4
+        pos = np.arange(self.view_num, dtype=np.float32)
+        view_embedding = torch.from_numpy(
+            get_1d_sincos_pos_embed_from_grid(self.model.config.hidden_size, pos)).float()
+        view_embedding = view_embedding.unsqueeze(1).repeat(1, self.num_patches, 1)
+        self.view_embed = view_embedding.unsqueeze(0)
         
-        if mask is not None:
-            mask = mask.to(image)
-            image = image * mask
-        supported_sizes = [518, 530]
-        if (image.shape[2] not in supported_sizes or image.shape[3] not in supported_sizes) and not self.has_guidance_embed:
-            print(f'Image shape {image.shape} not supported. Resizing to 518x518')
-            inputs = self.transform(image)
+        self.view2idx = {
+            'front': 0,
+            'left': 1,
+            'back': 2,
+            'right': 3
+        }
+
+    def forward(self, image, mask=None, value_range=(-1, 1), view_dict=None):
+        if view_dict is None:
+            self.view_num = 1
+            if value_range is not None:
+                low, high = value_range
+                image = (image - low) / (high - low)
+
+            image = image.to(self.model.device, dtype=self.model.dtype)
+            
+            if mask is not None:
+                mask = mask.to(image)
+                image = image * mask
+            supported_sizes = [518, 530]
+            if (image.shape[2] not in supported_sizes or image.shape[3] not in supported_sizes) and not self.has_guidance_embed:
+                log.info(f'Image shape {image.shape} not supported. Resizing to 518x518')
+                inputs = self.transform(image)
+            else:
+                inputs = image
+            outputs = self.model(inputs)
+
+            last_hidden_state = outputs.last_hidden_state
+            if not self.use_cls_token:
+                last_hidden_state = last_hidden_state[:, 1:, :]
+
+            return last_hidden_state
         else:
-            inputs = image
-        outputs = self.model(inputs)
+            images = []
+            view_indexes = []
+            supported_sizes = [518, 530]
 
-        last_hidden_state = outputs.last_hidden_state
-        if not self.use_cls_token:
-            last_hidden_state = last_hidden_state[:, 1:, :]
+            for view_tag, view_image in view_dict.items():
+                if view_image is not None:
+                    if view_image.shape[1] == 4:
+                        log.info('received image with alpha channel, masking out background...')
+                        rgb = view_image[:, :3, :, :]
+                        alpha = view_image[:, 3:4, :, :]
+                        view_image = rgb * alpha
+                    view_image = view_image.to(self.model.device, dtype=self.model.dtype)
+                    if (view_image.shape[2] not in supported_sizes or view_image.shape[3] not in supported_sizes):
+                        log.info(f'view_image shape {view_image.shape} not supported. Resizing to 518x518')
+                        view_image = self.transform(view_image)
+                    images.append(view_image)
+                    view_indexes.append(self.view2idx[view_tag])
 
-        return last_hidden_state
+            image_tensors = torch.cat(images, 0)
+
+            outputs = self.model(image_tensors)
+
+            self.view_num = len(images)
+
+            last_hidden_state = outputs.last_hidden_state
+            last_hidden_state = last_hidden_state.view(
+                self.view_num, 
+                -1,
+                last_hidden_state.shape[-1]
+            )
+            view_embedding = self.view_embed.to(last_hidden_state.dtype).to(last_hidden_state.device)
+            if self.view_num != 4:
+                view_embeddings = []
+                for idx in range(len(view_indexes)):
+                    view_embeddings.append(self.view_embed[:, idx, ...])
+                view_embedding = torch.cat(view_embeddings, 0).to(last_hidden_state.dtype).to(last_hidden_state.device)
+
+            last_hidden_state = last_hidden_state + view_embedding
+            last_hidden_state = last_hidden_state.view(-1, last_hidden_state.shape[-1])
+            return last_hidden_state.unsqueeze(0)
 
     def unconditional_embedding(self, batch_size):
         device = next(self.model.parameters()).device
         dtype = next(self.model.parameters()).dtype
         zero = torch.zeros(
             batch_size,
-            self.num_patches,
+            self.num_patches * self.view_num,
             self.model.config.hidden_size,
             device=device,
             dtype=dtype,
@@ -162,9 +241,9 @@ class SingleImageEncoder(nn.Module):
         super().__init__()
         self.main_image_encoder = build_image_encoder(main_image_encoder)
 
-    def forward(self, image, mask=None):
+    def forward(self, image=None, mask=None, view_dict=None):
         outputs = {
-            'main': self.main_image_encoder(image, mask=mask),
+            'main': self.main_image_encoder(image=image, mask=mask, view_dict=view_dict),
         }
         return outputs
 
