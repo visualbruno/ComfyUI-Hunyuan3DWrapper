@@ -1213,7 +1213,9 @@ class Hy3DVAEDecode:
 
         vae.to(device)
 
-        vae.enable_flashvdm_decoder(enabled=enable_flash_vdm)
+        vae.enable_flashvdm_decoder(
+            enabled=enable_flash_vdm,
+            mc_algo=mc_algo,)
         
         latents = 1. / vae.scale_factor * latents
         latents = vae(latents)

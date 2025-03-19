@@ -66,6 +66,7 @@ class SurfaceExtractor:
 
 class MCSurfaceExtractor(SurfaceExtractor):
     def run(self, grid_logit, *, mc_level, bounds, octree_resolution, **kwargs):
+        print("MC Surface Extractor")
         vertices, faces, normals, _ = measure.marching_cubes(
             grid_logit.cpu().numpy(),
             mc_level,
@@ -79,6 +80,7 @@ class MCSurfaceExtractor(SurfaceExtractor):
 class DMCSurfaceExtractor(SurfaceExtractor):
     def run(self, grid_logit, *, octree_resolution, **kwargs):
         device = grid_logit.device
+        print("DMC Surface Extractor")
         if not hasattr(self, 'dmc'):
             try:
                 from diso import DiffDMC
