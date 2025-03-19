@@ -45,6 +45,7 @@ import comfy.model_management as mm
 
 logger = logging.getLogger(__name__)
 
+from .schedulers import FlowMatchEulerDiscreteScheduler, ConsistencyFlowMatchEulerDiscreteScheduler
 
 def retrieve_timesteps(
     scheduler,
@@ -154,6 +155,7 @@ class Hunyuan3DDiTPipeline:
         compile_args=None,
         attention_mode="sdpa",
         cublas_ops=False,
+        scheduler="FlowMatchEulerDiscreteScheduler", 
         **kwargs,
     ):
 
@@ -224,7 +226,13 @@ class Hunyuan3DDiTPipeline:
                 set_module_tensor_to_device(conditioner, name, device=offload_device, dtype=dtype, value=ckpt['conditioner'][name])
 
         image_processor = instantiate_from_config(config['image_processor'])
-        scheduler = instantiate_from_config(config['scheduler'])
+
+        if scheduler == "FlowMatchEulerDiscreteScheduler":
+            scheduler = FlowMatchEulerDiscreteScheduler(num_train_timesteps=1000)
+        elif scheduler == "ConsistencyFlowMatchEulerDiscreteScheduler":
+            scheduler = ConsistencyFlowMatchEulerDiscreteScheduler(num_train_timesteps=1000, pcm_timesteps=100)
+        
+        #scheduler = instantiate_from_config(config['scheduler'])
 
         if compile_args is not None:
             torch._dynamo.config.cache_size_limit = compile_args["dynamo_cache_size_limit"]

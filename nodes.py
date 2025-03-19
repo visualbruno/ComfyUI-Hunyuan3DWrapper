@@ -12,6 +12,8 @@ from tqdm import tqdm
 from .hy3dgen.shapegen import Hunyuan3DDiTFlowMatchingPipeline, FaceReducer, FloaterRemover, DegenerateFaceRemover
 from .hy3dgen.texgen.hunyuanpaint.unet.modules import UNet2DConditionModel, UNet2p5DConditionModel
 from .hy3dgen.texgen.hunyuanpaint.pipeline import HunyuanPaintPipeline
+from .hy3dgen.shapegen.schedulers import FlowMatchEulerDiscreteScheduler, ConsistencyFlowMatchEulerDiscreteScheduler
+
 
 from diffusers import AutoencoderKL
 from diffusers.schedulers import (
@@ -1028,6 +1030,7 @@ class Hy3DGenerateMesh:
             },
             "optional": {
                 "mask": ("MASK", ),
+                "scheduler": (["FlowMatchEulerDiscreteScheduler", "ConsistencyFlowMatchEulerDiscreteScheduler"],),
             }
         }
 
@@ -1036,7 +1039,7 @@ class Hy3DGenerateMesh:
     FUNCTION = "process"
     CATEGORY = "Hunyuan3DWrapper"
 
-    def process(self, pipeline, image, steps, guidance_scale, seed, mask=None, front=None, back=None, left=None, right=None):
+    def process(self, pipeline, image, steps, guidance_scale, seed, mask=None, front=None, back=None, left=None, right=None, scheduler="FlowMatchEulerDiscreteScheduler"):
 
         mm.unload_all_models()
         mm.soft_empty_cache()
@@ -1051,6 +1054,13 @@ class Hy3DGenerateMesh:
             mask = mask.unsqueeze(1).repeat(1, 3, 1, 1).to(device)
             if mask.shape[2] != image.shape[2] or mask.shape[3] != image.shape[3]:
                 mask = F.interpolate(mask, size=(image.shape[2], image.shape[3]), mode='nearest')
+
+        if scheduler == "FlowMatchEulerDiscreteScheduler":
+            scheduler = FlowMatchEulerDiscreteScheduler(num_train_timesteps=1000)
+        elif scheduler == "ConsistencyFlowMatchEulerDiscreteScheduler":
+            scheduler = ConsistencyFlowMatchEulerDiscreteScheduler(num_train_timesteps=1000, pcm_timesteps=100)
+
+        pipeline.scheduler = scheduler
 
         pipeline.to(device)
 
@@ -1090,7 +1100,8 @@ class Hy3DGenerateMeshMultiView():
                 "front": ("IMAGE", ),
                 "left": ("IMAGE", ),
                 "right": ("IMAGE", ),
-                "back": ("IMAGE", ),                
+                "back": ("IMAGE", ),
+                "scheduler": (["FlowMatchEulerDiscreteScheduler", "ConsistencyFlowMatchEulerDiscreteScheduler"],),           
             }
         }
 
@@ -1099,7 +1110,7 @@ class Hy3DGenerateMeshMultiView():
     FUNCTION = "process"
     CATEGORY = "Hunyuan3DWrapper"
 
-    def process(self, pipeline, steps, guidance_scale, seed, mask=None, front=None, back=None, left=None, right=None):
+    def process(self, pipeline, steps, guidance_scale, seed, mask=None, front=None, back=None, left=None, right=None, scheduler="FlowMatchEulerDiscreteScheduler"):
 
         mm.unload_all_models()
         mm.soft_empty_cache()
@@ -1124,6 +1135,11 @@ class Hy3DGenerateMeshMultiView():
             'right': right,
             'back': back
         }
+
+        if scheduler == "FlowMatchEulerDiscreteScheduler":
+            scheduler = FlowMatchEulerDiscreteScheduler(num_train_timesteps=1000)
+        elif scheduler == "ConsistencyFlowMatchEulerDiscreteScheduler":
+            scheduler = ConsistencyFlowMatchEulerDiscreteScheduler(num_train_timesteps=1000, pcm_timesteps=100)
 
         try:
             torch.cuda.reset_peak_memory_stats(device)
