@@ -147,7 +147,6 @@ class Hunyuan3DDiTPipeline:
     def from_single_file(
         cls,
         ckpt_path,
-        config_path,
         device='cuda',
         offload_device=torch.device('cpu'),
         dtype=torch.float16,
@@ -157,9 +156,6 @@ class Hunyuan3DDiTPipeline:
         cublas_ops=False,
         **kwargs,
     ):
-        # load config
-        with open(config_path, 'r') as f:
-            config = yaml.safe_load(f)
 
         # load ckpt
         if use_safetensors:
@@ -181,6 +177,23 @@ class Hunyuan3DDiTPipeline:
                 ckpt[model_name][new_key] = value
         else:
             ckpt = torch.load(ckpt_path, map_location='cpu')
+
+        script_directory = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        # load config
+
+        single_block_nums = set()
+        for k in ckpt["model"].keys():
+            if k.startswith('single_blocks.'):
+                block_num = int(k.split('.')[1])
+                single_block_nums.add(block_num)
+    
+        if len(single_block_nums) < 17:
+            config_path = os.path.join(script_directory, "configs", "dit_config_mini.yaml")
+            logger.info(f"Model has {len(single_block_nums)} single blocks, setting config to dit_config_mini.yaml")
+        else:
+            config_path = os.path.join(script_directory, "configs", "dit_config.yaml")
+        with open(config_path, 'r') as f:
+            config = yaml.safe_load(f)
 
         
         # load model

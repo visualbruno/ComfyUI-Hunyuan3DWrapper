@@ -125,11 +125,9 @@ class Hy3DModelLoader:
         device = mm.get_torch_device()
         offload_device=mm.unet_offload_device()
 
-        config_path = os.path.join(script_directory, "configs", "dit_config.yaml")
         model_path = folder_paths.get_full_path("diffusion_models", model)
         pipe, vae = Hunyuan3DDiTFlowMatchingPipeline.from_single_file(
-            ckpt_path=model_path, 
-            config_path=config_path, 
+            ckpt_path=model_path,  
             use_safetensors=True, 
             device=device, 
             offload_device=offload_device,
