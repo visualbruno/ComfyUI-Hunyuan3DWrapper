@@ -160,6 +160,17 @@ class Hy3DVAELoader:
         model_path = folder_paths.get_full_path("vae", model_name)
 
         vae_sd = load_torch_file(model_path)
+        geo_decoder_mlp_expand_ratio: 4
+  
+        mlp_expand_ratio = 4
+        downsample_ratio = 1
+        geo_decoder_ln_post = True
+        if "geo_decoder.ln_post.weight" not in vae_sd:
+            log.info("Turbo VAE detected")
+            geo_decoder_ln_post = False
+            mlp_expand_ratio = 1
+            downsample_ratio = 2
+            
 
         config = {
             'num_latents': 3072,
@@ -172,9 +183,9 @@ class Hy3DVAELoader:
             'qkv_bias': False,
             'qk_norm': True,
             'scale_factor': 0.9990943042622529,
-            'geo_decoder_mlp_expand_ratio': 1,
-            'geo_decoder_downsample_ratio': 2,
-            'geo_decoder_ln_post': False
+            'geo_decoder_mlp_expand_ratio': mlp_expand_ratio,
+            'geo_decoder_downsample_ratio': downsample_ratio,
+            'geo_decoder_ln_post': geo_decoder_ln_post
         }
 
         vae = ShapeVAE(**config)
