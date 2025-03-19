@@ -1078,7 +1078,7 @@ class Hy3DGenerateMesh:
         
         return (latents, )
     
-class Hy3DGenerateMeshMultiView(Hy3DGenerateMesh):
+class Hy3DGenerateMeshMultiView():
     @classmethod
     def INPUT_TYPES(s):
         return {
@@ -1155,6 +1155,8 @@ class Hy3DGenerateMeshMultiView(Hy3DGenerateMesh):
                     alpha = view_image[:, 3:4, :, :]
                     mask = alpha
                     masks.append(mask)
+                else:
+                    rgb = view_image
                 images.append(rgb)
 
         image_tensors = torch.cat(images, 0).permute(0, 2, 3, 1).cpu().float()
