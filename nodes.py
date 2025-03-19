@@ -1158,7 +1158,10 @@ class Hy3DGenerateMeshMultiView():
                 images.append(rgb)
 
         image_tensors = torch.cat(images, 0).permute(0, 2, 3, 1).cpu().float()
-        mask_tensors = torch.cat(masks, 0).squeeze(1).cpu().float()
+        if masks:
+            mask_tensors = torch.cat(masks, 0).squeeze(1).cpu().float()
+        else:
+            mask_tensors = torch.zeros(image_tensors.shape[0], image_tensors.shape[1], image_tensors.shape[2]).cpu().float()
 
         pipeline.to(offload_device)
         
