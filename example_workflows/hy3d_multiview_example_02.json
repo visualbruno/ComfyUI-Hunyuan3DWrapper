@@ -1,8 +1,8 @@
 {
   "id": "5d70fb4d-16ed-44a1-b502-bf201947d5ef",
   "revision": 0,
-  "last_node_id": 202,
-  "last_link_id": 371,
+  "last_node_id": 203,
+  "last_link_id": 375,
   "nodes": [
     {
       "id": 64,
@@ -764,7 +764,7 @@
         {
           "name": "trimesh",
           "type": "TRIMESH",
-          "link": 86
+          "link": 373
         }
       ],
       "outputs": [
@@ -787,56 +787,6 @@
       ]
     },
     {
-      "id": 59,
-      "type": "Hy3DPostprocessMesh",
-      "pos": [
-        950,
-        -440
-      ],
-      "size": [
-        315,
-        174
-      ],
-      "flags": {},
-      "order": 50,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "trimesh",
-          "type": "TRIMESH",
-          "link": 251
-        },
-        {
-          "name": "mask",
-          "shape": 7,
-          "type": "MASK",
-          "link": null
-        }
-      ],
-      "outputs": [
-        {
-          "name": "trimesh",
-          "type": "TRIMESH",
-          "slot_index": 0,
-          "links": [
-            86,
-            133,
-            284
-          ]
-        }
-      ],
-      "properties": {
-        "Node name for S&R": "Hy3DPostprocessMesh"
-      },
-      "widgets_values": [
-        true,
-        true,
-        true,
-        50000,
-        false
-      ]
-    },
-    {
       "id": 163,
       "type": "Hy3DRenderSingleView",
       "pos": [
@@ -854,7 +804,7 @@
         {
           "name": "trimesh",
           "type": "TRIMESH",
-          "link": 284
+          "link": 375
         }
       ],
       "outputs": [
@@ -917,7 +867,7 @@
           "type": "TRIMESH",
           "slot_index": 0,
           "links": [
-            251
+            372
           ]
         }
       ],
@@ -1599,7 +1549,7 @@
         {
           "name": "trimesh",
           "type": "TRIMESH",
-          "link": 133
+          "link": 374
         }
       ],
       "outputs": [
@@ -3242,6 +3192,49 @@
       ],
       "color": "#432",
       "bgcolor": "#653"
+    },
+    {
+      "id": 203,
+      "type": "Hy3DPostprocessMesh",
+      "pos": [
+        950,
+        -440
+      ],
+      "size": [
+        318.9639587402344,
+        158.95484924316406
+      ],
+      "flags": {},
+      "order": 50,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "trimesh",
+          "type": "TRIMESH",
+          "link": 372
+        }
+      ],
+      "outputs": [
+        {
+          "name": "trimesh",
+          "type": "TRIMESH",
+          "links": [
+            373,
+            374,
+            375
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "Hy3DPostprocessMesh"
+      },
+      "widgets_values": [
+        true,
+        true,
+        true,
+        50000,
+        false
+      ]
     }
   ],
   "links": [
@@ -3270,28 +3263,12 @@
       "REMBG_SESSION"
     ],
     [
-      86,
-      59,
-      0,
-      17,
-      0,
-      "HY3DMESH"
-    ],
-    [
       99,
       64,
       0,
       35,
       1,
       "IMAGE"
-    ],
-    [
-      133,
-      59,
-      0,
-      83,
-      0,
-      "HY3DMESH"
     ],
     [
       134,
@@ -3494,14 +3471,6 @@
       "HY3DVAE"
     ],
     [
-      251,
-      140,
-      0,
-      59,
-      0,
-      "HY3DMESH"
-    ],
-    [
       262,
       144,
       0,
@@ -3580,14 +3549,6 @@
       162,
       0,
       "STRING"
-    ],
-    [
-      284,
-      59,
-      0,
-      163,
-      0,
-      "TRIMESH"
     ],
     [
       292,
@@ -4004,6 +3965,38 @@
       195,
       1,
       "MASK"
+    ],
+    [
+      372,
+      140,
+      0,
+      203,
+      0,
+      "TRIMESH"
+    ],
+    [
+      373,
+      203,
+      0,
+      17,
+      0,
+      "TRIMESH"
+    ],
+    [
+      374,
+      203,
+      0,
+      83,
+      0,
+      "TRIMESH"
+    ],
+    [
+      375,
+      203,
+      0,
+      163,
+      0,
+      "TRIMESH"
     ]
   ],
   "groups": [
@@ -4115,10 +4108,10 @@
   "config": {},
   "extra": {
     "ds": {
-      "scale": 0.5559917313492542,
+      "scale": 0.6727499949325977,
       "offset": [
-        2224.8856403574127,
-        1124.646947269052
+        1839.422984165225,
+        1000.9457200273665
       ]
     },
     "node_versions": {
