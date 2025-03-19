@@ -1194,8 +1194,12 @@ class Hy3DVAEDecode:
                 "octree_resolution": ("INT", {"default": 384, "min": 8, "max": 4096, "step": 8}),
                 "num_chunks": ("INT", {"default": 8000, "min": 1, "max": 10000000, "step": 1, "tooltip": "Number of chunks to process at once, higher values use more memory, but make the process faster"}),
                 "mc_level": ("FLOAT", {"default": 0, "min": -1.0, "max": 1.0, "step": 0.0001}),
-                "mc_algo": (["mc", "dmc", "odc", "none"], {"default": "mc"}),
+                #"mc_algo": (["mc", "dmc", "odc", "none"], {"default": "mc"}),
+                "mc_algo": (["mc", "dmc"], {"default": "mc"}),
             },
+            "optional": {
+                "enable_flash_vdm": ("BOOLEAN", {"default": True}),
+            }
         }
 
     RETURN_TYPES = ("TRIMESH",)
@@ -1203,11 +1207,14 @@ class Hy3DVAEDecode:
     FUNCTION = "process"
     CATEGORY = "Hunyuan3DWrapper"
 
-    def process(self, vae, latents, box_v, octree_resolution, mc_level, num_chunks, mc_algo):
+    def process(self, vae, latents, box_v, octree_resolution, mc_level, num_chunks, mc_algo, enable_flash_vdm=True):
         device = mm.get_torch_device()
         offload_device = mm.unet_offload_device()
 
         vae.to(device)
+
+        vae.enable_flashvdm_decoder(enabled=enable_flash_vdm)
+        
         latents = 1. / vae.scale_factor * latents
         latents = vae(latents)
         

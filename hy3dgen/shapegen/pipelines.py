@@ -204,7 +204,7 @@ class Hunyuan3DDiTPipeline:
             config['model']['params']['guidance_embed'] = True
             config['conditioner']['params']['main_image_encoder']['kwargs']['has_guidance_embed'] = True
         config['model']['params']['attention_mode'] = attention_mode
-        config['vae']['params']['attention_mode'] = attention_mode
+        #config['vae']['params']['attention_mode'] = attention_mode
 
         if cublas_ops:
             config['vae']['params']['cublas_ops'] = True
