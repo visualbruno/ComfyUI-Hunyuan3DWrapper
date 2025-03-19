@@ -137,10 +137,12 @@ class ImageEncoder(nn.Module):
             for view_tag, view_image in view_dict.items():
                 if view_image is not None:
                     if view_image.shape[1] == 4:
-                        log.info('received image with alpha channel, masking out background...')
+                        log.info(f'{view_tag} view image has alpha channel, using it to set background to black')
                         rgb = view_image[:, :3, :, :]
                         alpha = view_image[:, 3:4, :, :]
                         view_image = rgb * alpha
+                    else:
+                        log.warning(f"{view_tag} view image has no alpha channel, make sure the background is already black")
                     view_image = view_image.to(self.model.device, dtype=self.model.dtype)
                     if (view_image.shape[2] not in supported_sizes or view_image.shape[3] not in supported_sizes):
                         log.info(f'view_image shape {view_image.shape} not supported. Resizing to 518x518')
