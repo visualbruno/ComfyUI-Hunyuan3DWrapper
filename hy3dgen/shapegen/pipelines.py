@@ -206,8 +206,8 @@ class Hunyuan3DDiTPipeline:
         config['model']['params']['attention_mode'] = attention_mode
         #config['vae']['params']['attention_mode'] = attention_mode
 
-        if cublas_ops:
-            config['vae']['params']['cublas_ops'] = True
+        #if cublas_ops:
+        #    config['vae']['params']['cublas_ops'] = True
         
         with init_empty_weights():
             model = instantiate_from_config(config['model'])

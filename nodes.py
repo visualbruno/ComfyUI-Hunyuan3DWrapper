@@ -1086,6 +1086,7 @@ class Hy3DGenerateMesh:
             "optional": {
                 "mask": ("MASK", ),
                 "scheduler": (["FlowMatchEulerDiscreteScheduler", "ConsistencyFlowMatchEulerDiscreteScheduler"],),
+                "force_offload": ("BOOLEAN", {"default": True, "tooltip": "Offloads the model to the offload device once the process is done."}),
             }
         }
 
@@ -1094,7 +1095,8 @@ class Hy3DGenerateMesh:
     FUNCTION = "process"
     CATEGORY = "Hunyuan3DWrapper"
 
-    def process(self, pipeline, image, steps, guidance_scale, seed, mask=None, front=None, back=None, left=None, right=None, scheduler="FlowMatchEulerDiscreteScheduler"):
+    def process(self, pipeline, image, steps, guidance_scale, seed, mask=None, front=None, back=None, left=None, right=None, 
+                scheduler="FlowMatchEulerDiscreteScheduler", force_offload=True):
 
         mm.unload_all_models()
         mm.soft_empty_cache()
@@ -1136,8 +1138,9 @@ class Hy3DGenerateMesh:
             torch.cuda.reset_peak_memory_stats(device)
         except:
             pass
-
-        pipeline.to(offload_device)
+        
+        if not force_offload:
+            pipeline.to(offload_device)
         
         return (latents, )
     
@@ -1254,6 +1257,8 @@ class Hy3DVAEDecode:
             },
             "optional": {
                 "enable_flash_vdm": ("BOOLEAN", {"default": True}),
+                "force_offload": ("BOOLEAN", {"default": True, "tooltip": "Offloads the model to the offload device once the process is done."}),
+
             }
         }
 
@@ -1262,7 +1267,7 @@ class Hy3DVAEDecode:
     FUNCTION = "process"
     CATEGORY = "Hunyuan3DWrapper"
 
-    def process(self, vae, latents, box_v, octree_resolution, mc_level, num_chunks, mc_algo, enable_flash_vdm=True):
+    def process(self, vae, latents, box_v, octree_resolution, mc_level, num_chunks, mc_algo, enable_flash_vdm=True, force_offload=True):
         device = mm.get_torch_device()
         offload_device = mm.unet_offload_device()
 
@@ -1283,7 +1288,8 @@ class Hy3DVAEDecode:
             octree_resolution=octree_resolution,
             mc_algo=mc_algo,
         )[0]
-        vae.to(offload_device)
+        if force_offload:
+            vae.to(offload_device)
 
         outputs.mesh_f = outputs.mesh_f[:, ::-1]
         mesh_output = Trimesh.Trimesh(outputs.mesh_v, outputs.mesh_f)

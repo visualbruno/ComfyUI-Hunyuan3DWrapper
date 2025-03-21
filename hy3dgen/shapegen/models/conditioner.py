@@ -112,6 +112,7 @@ class ImageEncoder(nn.Module):
                 image = (image - low) / (high - low)
 
             image = image.to(self.model.device, dtype=self.model.dtype)
+            print("image shape", image.shape)
             
             if mask is not None:
                 mask = mask.to(image)

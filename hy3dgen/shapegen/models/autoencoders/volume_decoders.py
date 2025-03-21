@@ -25,6 +25,7 @@ from .attention_blocks import CrossAttentionDecoder
 from .attention_processors import FlashVDMCrossAttentionProcessor, FlashVDMTopMCrossAttentionProcessor
 from ...utils import logger
 
+from comfy.utils import ProgressBar
 
 def extract_near_surface_volume_fn(input_tensor: torch.Tensor, alpha: float):
     device = input_tensor.device
@@ -318,7 +319,7 @@ class FlashVDMVolumeDecoding:
         for i, resolution in enumerate(resolutions[1:]):
             resolutions[i + 1] = resolutions[0] * 2 ** (i + 1)
 
-        logger.info(f"FlashVDMVolumeDecoding Resolution: {resolutions}")
+        #logger.info(f"FlashVDMVolumeDecoding Resolution: {resolutions}")
 
         # 1. generate query points
         if isinstance(bounds, float):
@@ -354,6 +355,7 @@ class FlashVDMVolumeDecoding:
         )
         batch_logits = []
         num_batchs = max(num_chunks // xyz_samples.shape[1], 1)
+        comfy_pbar = ProgressBar(xyz_samples.shape[0])
         for start in tqdm(range(0, xyz_samples.shape[0], num_batchs),
                           desc=f"FlashVDM Volume Decoding", disable=not enable_pbar):
             queries = xyz_samples[start: start + num_batchs, :]
@@ -362,13 +364,17 @@ class FlashVDMVolumeDecoding:
             processor.topk = True
             logits = geo_decoder(queries=queries, latents=batch_latents)
             batch_logits.append(logits)
+            comfy_pbar.update(num_chunks)
+            
         grid_logits = torch.cat(batch_logits, dim=0).reshape(
             mini_grid_num, mini_grid_num, mini_grid_num,
             mini_grid_size, mini_grid_size,
             mini_grid_size
         ).permute(0, 3, 1, 4, 2, 5).contiguous().view(
             (batch_size, grid_size[0], grid_size[1], grid_size[2])
-        )
+            )
+            
+            
 
         for octree_depth_now in resolutions[1:]:
             grid_size = np.array([octree_depth_now + 1] * 3)
