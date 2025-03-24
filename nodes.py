@@ -315,7 +315,7 @@ class DownloadAndLoadHy3DPaintModel:
     def INPUT_TYPES(s):
         return {
             "required": {
-                "model": (["hunyuan3d-paint-v2-0"],),
+                "model": (["hunyuan3d-paint-v2-0", "hunyuan3d-paint-v2-0-turbo"],),
             },
             "optional": {
                 "compile_args": ("HY3DCOMPILEARGS", {"tooltip": "torch.compile settings, when connected to the model loader, torch.compile of the selected models is attempted. Requires Triton and torch 2.5.0 is recommended"}),
@@ -340,7 +340,7 @@ class DownloadAndLoadHy3DPaintModel:
             snapshot_download(
                 repo_id="tencent/Hunyuan3D-2",
                 allow_patterns=[f"*{model}*"],
-                ignore_patterns=["*diffusion_pytorch_model.bin"],
+                ignore_patterns=["*unet/diffusion_pytorch_model.bin", "*image_encoder*"],
                 local_dir=download_path,
                 local_dir_use_symlinks=False,
             )
