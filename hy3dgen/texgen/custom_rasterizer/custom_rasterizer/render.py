@@ -22,8 +22,8 @@
 # fine-tuning enabling code and other elements of the foregoing made publicly available
 # by Tencent in accordance with TENCENT HUNYUAN COMMUNITY LICENSE AGREEMENT.
 
-import custom_rasterizer_kernel
 import torch
+import custom_rasterizer_kernel
 
 
 def rasterize(pos, tri, resolution, clamp_depth=torch.zeros(0), use_depth_prior=0):
