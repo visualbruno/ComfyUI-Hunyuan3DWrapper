@@ -124,13 +124,15 @@ def export_to_trimesh(mesh_output):
 
 
 def get_obj_from_str(string, reload=False):
-    package_directory_name = os.path.basename(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-
     module, cls = string.rsplit(".", 1)
     if reload:
         module_imp = importlib.import_module(module)
         importlib.reload(module_imp)
-    return getattr(importlib.import_module(module, package=package_directory_name), cls)
+    try:
+        obj = getattr(importlib.import_module(module, package=os.path.basename(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))), cls)
+    except:
+        obj = getattr(importlib.import_module(module, package=os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath( __file__ ))))), cls)
+    return obj
 
 
 def instantiate_from_config(config, **kwargs):
