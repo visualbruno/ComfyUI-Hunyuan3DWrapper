@@ -1031,6 +1031,9 @@ class Hy3DLoadMesh:
     DESCRIPTION = "Loads a glb model from the given path."
 
     def load(self, glb_path):
+
+        if not os.path.exists(glb_path):
+            glb_path = os.path.join(folder_paths.get_input_directory(), glb_path)
         
         trimesh = Trimesh.load(glb_path, force="mesh")
         
