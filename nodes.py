@@ -1039,6 +1039,54 @@ class Hy3DLoadMesh:
         
         return (trimesh,)
 
+
+class TrimeshToMESH:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "trimesh": ("TRIMESH",),
+            }
+        }
+    RETURN_TYPES = ("MESH",)
+    OUTPUT_TOOLTIPS = ("MESH object containing vertices and faces as torch tensors.",)
+    
+    FUNCTION = "load"
+    CATEGORY = "Hunyuan3DWrapper"
+    DESCRIPTION = "Converts trimesh object to ComfyUI MESH object, which only includes mesh data"
+
+    def load(self, trimesh):
+
+        vertices = torch.tensor(trimesh.vertices, dtype=torch.float32)
+        faces = torch.tensor(trimesh.faces, dtype=torch.float32)
+        mesh = (self.MESH(vertices.unsqueeze(0), faces.unsqueeze(0)))
+        
+        return (mesh,)
+
+    class MESH:
+        def __init__(self, vertices, faces):
+            self.vertices = vertices
+            self.faces = faces
+
+class MESHToTrimesh:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "mesh": ("MESH",),
+            }
+        }
+    RETURN_TYPES = ("TRIMESH",)
+    OUTPUT_TOOLTIPS = ("TRIMESH object containing vertices and faces as torch tensors.",)
+    
+    FUNCTION = "load"
+    CATEGORY = "Hunyuan3DWrapper"
+    DESCRIPTION = "Converts trimesh object to ComfyUI MESH object, which only includes mesh data"
+
+    def load(self, mesh):
+        mesh_output = Trimesh.Trimesh(mesh.vertices[0], mesh.faces[0])
+        return (mesh_output,)
+
 class Hy3DUploadMesh:
     @classmethod
     def INPUT_TYPES(s):
@@ -1808,6 +1856,8 @@ NODE_CLASS_MAPPINGS = {
     "Hy3DMeshInfo": Hy3DMeshInfo,
     "Hy3DFastSimplifyMesh": Hy3DFastSimplifyMesh,
     "Hy3DNvdiffrastRenderer": Hy3DNvdiffrastRenderer,
+    "TrimeshToMESH": TrimeshToMESH,
+    "MESHToTrimesh": MESHToTrimesh,
     }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -1842,5 +1892,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "Hy3DBPT": "Hy3D BPT",
     "Hy3DMeshInfo": "Hy3D Mesh Info",
     "Hy3DFastSimplifyMesh": "Hy3D Fast Simplify Mesh",
-    "Hy3DNvdiffrastRenderer": "Hy3D Nvdiffrast Renderer"
+    "Hy3DNvdiffrastRenderer": "Hy3D Nvdiffrast Renderer",
+    "TrimeshToMESH": "Trimesh to MESH",
+    "MESHToTrimesh": "MESH to Trimesh",
     }
