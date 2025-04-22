@@ -1,7 +1,7 @@
 [project]
 name = "comfyui-hunyan3dwrapper"
 description = "Wrapper nodes for https://github.com/Tencent/Hunyuan3D-2, additional installation steps needed, please check the github repository"
-version = "1.0.5"
+version = "1.0.6"
 license = {file = "LICENSE"}
 dependencies = ["trimesh", "diffusers>=0.31.0","accelerate","huggingface_hub","einops","opencv-python","transformers","xatlas","pymeshlab","pygltflib","scikit-learn","scikit-image","pybind11"]
 
