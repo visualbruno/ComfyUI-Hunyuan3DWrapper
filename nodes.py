@@ -1229,14 +1229,22 @@ class Hy3DGenerateMeshMultiView():
 
         pipeline.to(device)
 
-        if front is not None:
+        if front is not None and not torch.all(front < 1e-6).item():
             front = front.clone().permute(0, 3, 1, 2).to(device)
-        if back is not None:
+        else:
+            front = None
+        if back is not None and not torch.all(back < 1e-6).item():
             back = back.clone().permute(0, 3, 1, 2).to(device)
-        if left is not None:
+        else:
+            back = None
+        if left is not None and not torch.all(left < 1e-6).item():
             left = left.clone().permute(0, 3, 1, 2).to(device)
-        if right is not None:
+        else:
+            left = None
+        if right is not None and not torch.all(right < 1e-6).item():
             right = right.clone().permute(0, 3, 1, 2).to(device)
+        else:
+            right = None
             
         view_dict = {
             'front': front,
