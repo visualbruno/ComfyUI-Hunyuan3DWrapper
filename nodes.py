@@ -139,6 +139,54 @@ class Hy3DModelLoader:
         
         return (pipe, vae,)
     
+class Hy3D_2_1SimpleMeshGen:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "model": (folder_paths.get_filename_list("diffusion_models"), {"tooltip": "These models are loaded from the 'ComfyUI/models/diffusion_models' -folder",}),
+                "image": ("IMAGE", {"tooltip": "Image to generate mesh from"}),
+                "steps": ("INT", {"default": 50, "min": 1, "max": 100, "step": 1, "tooltip": "Number of diffusion steps"}),
+                "guidance_scale": ("FLOAT", {"default": 5.0, "min": 1, "max": 30, "step": 0.1, "tooltip": "Guidance scale"}),
+                "octree_resolution": ("INT", {"default": 384, "min": 32, "max": 1024, "step": 32, "tooltip": "Octree resolution"}),
+            },
+        }
+
+    RETURN_TYPES = ("TRIMESH", )
+    RETURN_NAMES = ("trimesh",)
+    FUNCTION = "loadmodel"
+    CATEGORY = "Hunyuan3DWrapper"
+
+    def loadmodel(self, model, image, steps, guidance_scale, octree_resolution):
+        device = mm.get_torch_device()
+        offload_device=mm.unet_offload_device()
+
+        from .hy3dshape.hy3dshape.pipelines import Hunyuan3DDiTFlowMatchingPipeline
+        from .hy3dshape.hy3dshape.rembg import BackgroundRemover
+        import torchvision.transforms as T
+
+        model_path = folder_paths.get_full_path("diffusion_models", model)
+        if not hasattr(self, "pipeline"):
+            self.pipeline = Hunyuan3DDiTFlowMatchingPipeline.from_single_file(
+                config_path=os.path.join(script_directory, 'configs', 'dit_config_2_1.yaml'),
+                ckpt_path=model_path)
+        
+        to_pil = T.ToPILImage()
+        image = to_pil(image[0].permute(2, 0, 1))
+        
+        if image.mode == 'RGB':
+            rembg = BackgroundRemover()
+            image = rembg(image)
+        
+        mesh = self.pipeline(
+            image=image,
+            num_inference_steps=steps,
+            guidance_scale=guidance_scale,
+            octree_resolution=octree_resolution
+            )[0]
+        
+        return (mesh,)
+    
 class Hy3DVAELoader:
     @classmethod
     def INPUT_TYPES(s):
@@ -1833,6 +1881,7 @@ class Hy3DNvdiffrastRenderer:
 
 NODE_CLASS_MAPPINGS = {
     "Hy3DModelLoader": Hy3DModelLoader,
+    "Hy3D_2_1SimpleMeshGen": Hy3D_2_1SimpleMeshGen,
     "Hy3DVAELoader": Hy3DVAELoader,
     "Hy3DGenerateMesh": Hy3DGenerateMesh,
     "Hy3DGenerateMeshMultiView": Hy3DGenerateMeshMultiView,
@@ -1870,6 +1919,7 @@ NODE_CLASS_MAPPINGS = {
 
 NODE_DISPLAY_NAME_MAPPINGS = {
     "Hy3DModelLoader": "Hy3DModelLoader",
+    "Hy3D_2_1SimpleMeshGen": "Hy3D_2_1SimpleMeshGen",
     #"Hy3DVAELoader": "Hy3DVAELoader",
     "Hy3DGenerateMesh": "Hy3DGenerateMesh",
     "Hy3DGenerateMeshMultiView": "Hy3DGenerateMeshMultiView",

@@ -40,7 +40,7 @@ from tqdm import tqdm
 from accelerate import init_empty_weights
 from accelerate.utils import set_module_tensor_to_device
 
-from comfy.utils import ProgressBar
+from comfy.utils import ProgressBar, load_torch_file
 import comfy.model_management as mm
 
 logger = logging.getLogger(__name__)
@@ -161,26 +161,30 @@ class Hunyuan3DDiTPipeline:
         **kwargs,
     ):
 
-        # load ckpt
-        if use_safetensors:
-            ckpt_path = ckpt_path.replace('.ckpt', '.safetensors')
-        if not os.path.exists(ckpt_path):
-            raise FileNotFoundError(f"Model file {ckpt_path} not found")
-        logger.info(f"Loading model from {ckpt_path}")
+        # # load ckpt
+        # if use_safetensors:
+        #     ckpt_path = ckpt_path.replace('.ckpt', '.safetensors')
+        # if not os.path.exists(ckpt_path):
+        #     raise FileNotFoundError(f"Model file {ckpt_path} not found")
+        # logger.info(f"Loading model from {ckpt_path}")
 
-        if use_safetensors:
-            # parse safetensors
-            import safetensors.torch
-            safetensors_ckpt = safetensors.torch.load_file(ckpt_path, device='cpu')
-            ckpt = {}
-            for key, value in safetensors_ckpt.items():
-                model_name = key.split('.')[0]
-                new_key = key[len(model_name) + 1:]
-                if model_name not in ckpt:
-                    ckpt[model_name] = {}
-                ckpt[model_name][new_key] = value
-        else:
-            ckpt = torch.load(ckpt_path, map_location='cpu')
+        # if use_safetensors:
+        #     # parse safetensors
+        #     import safetensors.torch
+        #     safetensors_ckpt = safetensors.torch.load_file(ckpt_path, device='cpu')
+        #     ckpt = {}
+        #     for key, value in safetensors_ckpt.items():
+        #         model_name = key.split('.')[0]
+        #         new_key = key[len(model_name) + 1:]
+        #         if model_name not in ckpt:
+        #             ckpt[model_name] = {}
+        #         ckpt[model_name][new_key] = value
+        # else:
+        #     ckpt = torch.load(ckpt_path, map_location='cpu')
+        ckpt = load_torch_file(ckpt_path)
+        for k in ckpt:
+            print(k)
+        
 
         script_directory = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         # load config
