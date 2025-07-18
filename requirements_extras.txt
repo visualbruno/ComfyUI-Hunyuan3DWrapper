@@ -6,3 +6,12 @@ pynanoinstantmeshes
 #for fast decimation node
 pyfqmr
 diso
+#for meshlib decimation used in Batch nodes
+meshlib
+# Enhance Details
+opencv-contrib-python>=4.7.0.72
+opencv-contrib-python-headless>=4.7.0.72
+opencv-python>=4.7.0.72
+opencv-python-headless>=4.7.0.72
+pymatting
+cv2
