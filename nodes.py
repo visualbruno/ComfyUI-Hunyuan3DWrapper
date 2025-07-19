@@ -21,6 +21,7 @@ from .hy3dgen.shapegen.schedulers import FlowMatchEulerDiscreteScheduler, Consis
 from .hy3dgen.shapegen.models.autoencoders import ShapeVAE
 from .hy3dshape.hy3dshape.rembg import BackgroundRemover
 from .hy3dgen.shapegen.meshlib import postprocessmesh
+from .hy3dgen.texgen.differentiable_renderer.mesh_render import MeshRender
 
 
 from diffusers import AutoencoderKL
@@ -68,6 +69,28 @@ script_directory = os.path.dirname(os.path.abspath(__file__))
 comfy_path = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
 
 from .utils import log, print_memory
+
+def parse_string_to_int_list(number_string):
+  """
+  Parses a string containing comma-separated numbers into a list of integers.
+
+  Args:
+    number_string: A string containing comma-separated numbers (e.g., "20000,10000,5000").
+
+  Returns:
+    A list of integers parsed from the input string.
+    Returns an empty list if the input string is empty or None.
+  """
+  if not number_string:
+    return []
+
+  try:
+    # Split the string by comma and convert each part to an integer
+    int_list = [int(num.strip()) for num in number_string.split(',')]
+    return int_list
+  except ValueError as e:
+    print(f"Error converting string to integer: {e}. Please ensure all values are valid numbers.")
+    return []
 
 def pad_image(image, left: int = 0, right: int = 0, top: int = 0, bottom: int = 0, extra_padding: int = 0, color = '0,0,0', pad_mode = 'edge', mask=None, target_width=None, target_height=None):
     B, H, W, C = image.shape
@@ -740,9 +763,6 @@ class Hy3DRenderMultiView:
     CATEGORY = "Hunyuan3DWrapper"
 
     def process(self, trimesh, render_size, texture_size, camera_config=None, normal_space="world"):
-
-        from .hy3dgen.texgen.differentiable_renderer.mesh_render import MeshRender
-
         if camera_config is None:
             selected_camera_azims = [0, 90, 180, 270, 0, 180]
             selected_camera_elevs = [0, 0, 0, 0, 90, -90]
@@ -841,9 +861,6 @@ class Hy3DRenderSingleView:
     CATEGORY = "Hunyuan3DWrapper"
 
     def process(self, trimesh, render_type, camera_type, ortho_scale, camera_distance, pan_x, pan_y, render_size, azimuth, elevation, bg_color):
-
-        from .hy3dgen.texgen.differentiable_renderer.mesh_render import MeshRender
-
         bg_color = [int(x.strip())/255.0 for x in bg_color.split(",")]
 
         self.render = MeshRender(
@@ -920,11 +937,8 @@ class Hy3DRenderMultiViewDepth:
     CATEGORY = "Hunyuan3DWrapper"
 
     def process(self, trimesh, render_size, texture_size, camera_config=None):
-
         mm.unload_all_models()
         mm.soft_empty_cache()
-
-        from .hy3dgen.texgen.differentiable_renderer.mesh_render import MeshRender
 
         if camera_config is None:
             selected_camera_azims = [0, 90, 180, 270, 0, 180]
@@ -2401,8 +2415,6 @@ class Hy3DSampleMultiViewsBatch:
                     noise_scheduler = scheduler_mapping[scheduler].from_config(scheduler_config)
                 else:
                     raise ValueError(f"Unknown scheduler: {scheduler}")
-                
-                from .hy3dgen.texgen.differentiable_renderer.mesh_render import MeshRender
 
                 selected_camera_azims = camera_config["selected_camera_azims"]
                 selected_camera_elevs = camera_config["selected_camera_elevs"]
@@ -2644,7 +2656,7 @@ class Hy3DSampleMultiViewsBatch:
         else:
             print('Nothing to process')
 
-        return ("",)
+        return output_folder,
         
     def render_normal_multiview(self, camera_elevs, camera_azims, use_abs_coor=True, bg_color=[1, 1, 1]):
         normal_maps = []
@@ -2686,7 +2698,261 @@ class Hy3DSampleMultiViewsBatch:
                 project_textures, project_weighted_cos_maps)
         else:
             raise f'no method {method}'
-        return texture, ori_trust_map > 1E-8        
+        return texture, ori_trust_map > 1E-8      
+
+class Hy3DHighPolyToLowPolyApplyTexture:     
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "input_folder": ("STRING",),
+                "camera_config": ("HY3DCAMERA",),
+                "render_size": ("INT", {"default": 1024, "min": 64, "max": 4096, "step": 16}),
+                "texture_size": ("INT", {"default": 1024, "min": 64, "max": 4096, "step": 16}),                
+                "normal_space": (["world", "tangent"], {"default": "world"}),
+                "file_format": (["glb", "obj"],),
+                "target_face_nums": ("STRING",{"default":"20000,10000,5000"}),
+                "inpaint_method": (["ns", "telea"], {"default": "ns"}),
+                "inpaint_radius": ("INT", {"default": 3, "min": 1, "max": 10, "step": 1}),                
+            },
+        }
+
+    RETURN_TYPES = ("STRING",)
+    RETURN_NAMES = ("output_meshes_folder",)
+    FUNCTION = "process"
+    CATEGORY = "Hunyuan3DWrapper" 
+    OUTPUT_NODE = True
+    
+    def process(self, input_folder, camera_config, render_size, texture_size, normal_space, file_format, target_face_nums, inpaint_method, inpaint_radius):
+        device = mm.get_torch_device()
+        offload_device = mm.unet_offload_device()
+
+        output_mesh = None
+
+        if os.path.exists(input_folder):
+            pictures = get_picture_files(input_folder)
+            nb_pictures = len(pictures)
+            
+            mesh_files = get_mesh_files(input_folder)
+            nb_meshes = len(mesh_files)
+            
+            output_meshes_folder = os.path.join(input_folder,"LowPoly")
+            
+            list_of_faces = parse_string_to_int_list(target_face_nums)
+            if len(list_of_faces)>0:            
+                if nb_meshes>0:
+                    if nb_pictures>0:
+                        mesh_file = mesh_files[0]
+                        
+                        pictures = self.get_picture_list(pictures)
+                        nb_pictures = len(pictures)
+                        
+                        if nb_pictures>0:
+                            selected_camera_azims = camera_config["selected_camera_azims"]
+                            selected_camera_elevs = camera_config["selected_camera_elevs"]
+                            selected_view_weights = camera_config["selected_view_weights"]
+                            camera_distance = camera_config["camera_distance"]
+                            ortho_scale = camera_config["ortho_scale"]  
+
+                            self.render = MeshRender(
+                                default_resolution=render_size,
+                                texture_size=texture_size,
+                                camera_distance=camera_distance,
+                                ortho_scale=ortho_scale)
+                             
+                            highpoly_mesh = Trimesh.load(mesh_file, force="mesh")
+                            if highpoly_mesh.visual.uv is not None:
+                                print('UV is not None')
+                            highpoly_mesh = Trimesh.Trimesh(vertices=highpoly_mesh.vertices, faces=highpoly_mesh.faces)
+                                
+                            for target_nbfaces in list_of_faces:     
+                                try:
+                                    import meshlib.mrmeshpy as mrmeshpy
+                                except ImportError:
+                                    raise ImportError("meshlib not found. Please install it using 'pip install meshlib'")                    
+
+                                current_faces_num = len(highpoly_mesh.faces)
+                                settings = mrmeshpy.DecimateSettings()
+                                faces_to_delete = current_faces_num - target_nbfaces
+                                settings.maxDeletedFaces = faces_to_delete                        
+                                settings.packMesh = True
+                                
+                                print(f'Decimating to {target_nbfaces} ...')
+                                lowpoly_mesh = postprocessmesh(highpoly_mesh.vertices, highpoly_mesh.faces, settings)  
+                                
+                                #print('Unwrapping mesh ...')
+                                from .hy3dgen.texgen.utils.uv_warp_utils import mesh_uv_wrap
+                                lowpoly_mesh = mesh_uv_wrap(lowpoly_mesh)
+                                
+                                self.render.load_mesh(lowpoly_mesh)
+
+                                if normal_space == "world":
+                                    normal_maps, masks = self.render_normal_multiview(
+                                        selected_camera_elevs, selected_camera_azims, use_abs_coor=True)
+                                elif normal_space == "tangent":
+                                    normal_maps, masks = self.render_normal_multiview(
+                                        selected_camera_elevs, selected_camera_azims, bg_color=[0, 0, 0], use_abs_coor=False)                               
+                                
+                                position_maps = self.render_position_multiview(
+                                    selected_camera_elevs, selected_camera_azims)     
+
+                                multiviews_pil = []
+                                for img_file in pictures:
+                                    image = Image.open(img_file)
+                                    multiviews_pil.append(image)
+
+                                # Bake From MultiViews
+                                merge_method = 'fast'
+                                self.bake_exp = 4
+                                
+                                texture, mask = self.bake_from_multiview(multiviews_pil,
+                                                                         selected_camera_elevs, selected_camera_azims, selected_view_weights,
+                                                                         method=merge_method)
+                                                            
+                                mask = mask.squeeze(-1).cpu().float()
+                                texture = texture.unsqueeze(0).cpu().float()                             
+
+                                #Vertice Inpaint Texture
+                                from .hy3dgen.texgen.differentiable_renderer.mesh_processor import meshVerticeInpaint
+                                vtx_pos, pos_idx, vtx_uv, uv_idx = self.render.get_mesh()
+
+                                mask_np = (mask.squeeze(-1).squeeze(0).cpu().numpy() * 255).astype(np.uint8)
+                                texture_np = texture.squeeze(0).cpu().numpy() * 255
+
+                                texture_np, mask_np = meshVerticeInpaint(texture_np, mask_np, vtx_pos, vtx_uv, pos_idx, uv_idx)                                                      
+                                texture_np = texture_np.astype(np.uint8)
+                                
+                                texture_tensor = torch.from_numpy(texture_np).float() / 255.0
+                                texture_tensor = texture_tensor.unsqueeze(0)
+
+                                mask_tensor = torch.from_numpy(mask_np).float() / 255.0
+                                mask_tensor = mask_tensor.unsqueeze(0)                            
+                                
+                                #CV2 Inpaint
+                                import cv2
+                                mask_tensor = 1 - mask_tensor
+                                mask_np = (mask_tensor.squeeze(-1).squeeze(0).cpu().numpy() * 255).astype(np.uint8)
+                                texture_np = (texture_tensor.squeeze(0).cpu().numpy() * 255).astype(np.uint8)                            
+
+                                if inpaint_method == "ns":
+                                    inpaint_algo = cv2.INPAINT_NS
+                                elif inpaint_method == "telea":
+                                    inpaint_algo = cv2.INPAINT_TELEA
+                                    
+                                texture_np = cv2.inpaint(texture_np,mask_np,inpaint_radius,inpaint_algo)                           
+                                
+                                # inpaint_texture_pil = Image.fromarray(texture_np)
+                                # inpaint_texture_output_path = os.path.join(output_mesh_folder, 'texture.png')
+                                # inpaint_texture_pil.save(inpaint_texture_output_path)
+                                
+                                #Apply Texture
+                                texture_tensor = torch.from_numpy(texture_np).float() / 255.0
+                                texture_tensor = texture_tensor.unsqueeze(0)
+                                texture_tensor = texture_tensor.squeeze(0)
+                                self.render.set_texture(texture_tensor)
+                                output_mesh = self.render.save_mesh()    
+                                
+                                mesh_file_name = get_filename_without_extension_os_path(mesh_file)
+                                
+                                output_lowpoly_mesh_folder = os.path.join(output_meshes_folder,f'{target_nbfaces}')
+                                os.makedirs(output_lowpoly_mesh_folder, exist_ok=True) 
+                                output_glb_path = os.path.join(output_lowpoly_mesh_folder,f'{mesh_file_name}_{target_nbfaces}.{file_format}')
+                                
+                                output_mesh.export(output_glb_path, file_type=file_format)
+                        else:
+                            print(f'No picture found that starts with MV_ or UpscaledMV_');
+                    else:
+                        print(f'No picture found in {input_folder}')
+                else:
+                    print(f'No mesh file found in {input_folder}')
+            else:
+                print(f'No target_face_nums')
+        else:
+            print('Input folder does not exist')            
+
+        return output_meshes_folder,
+        
+    def get_picture_list(self, file_list):
+        """
+        Returns a list of picture paths based on specific rules:
+        - If 'UpscaledMV' pictures exist, only returns those, ordered by ID.
+        - Otherwise, returns 'MV' pictures, ordered by ID.
+
+        Args:
+            file_list (list): A list of file paths (strings).
+
+        Returns:
+            list: A sorted list of relevant picture paths.
+        """
+        upscaled_mv_pictures = []
+        mv_pictures = []
+
+        for file_path in file_list:
+            filename = os.path.basename(file_path)
+            if filename.startswith("UpscaledMV"):
+                upscaled_mv_pictures.append(file_path)
+            elif filename.startswith("MV"):
+                mv_pictures.append(file_path)
+
+        def get_id(file_path):
+            """Helper function to extract the numeric ID from the filename."""
+            filename = os.path.basename(file_path)
+            parts = filename.split('_')
+            if len(parts) > 1:
+                try:
+                    # Remove the file extension before converting to int
+                    return int(parts[1].split('.')[0])
+                except ValueError:
+                    return -1 # Invalid ID, put it at the end
+            return -1 # No ID found
+
+        if upscaled_mv_pictures:
+            return sorted(upscaled_mv_pictures, key=get_id)
+        else:
+            return sorted(mv_pictures, key=get_id)
+            
+    def render_normal_multiview(self, camera_elevs, camera_azims, use_abs_coor=True, bg_color=[1, 1, 1]):
+        normal_maps = []
+        masks = []
+        for elev, azim in zip(camera_elevs, camera_azims):
+            normal_map, mask = self.render.render_normal(
+                elev, azim, bg_color=bg_color, use_abs_coor=use_abs_coor, return_type='pl')
+            normal_maps.append(normal_map)
+            masks.append(mask)
+
+        return normal_maps, masks
+
+    def render_position_multiview(self, camera_elevs, camera_azims):
+        position_maps = []
+        for elev, azim in zip(camera_elevs, camera_azims):
+            position_map = self.render.render_position(
+                elev, azim, return_type='pl')
+            position_maps.append(position_map)
+
+        return position_maps     
+
+    def bake_from_multiview(self, views, camera_elevs,
+                            camera_azims, view_weights, method='graphcut'):
+        project_textures, project_weighted_cos_maps = [], []
+        project_boundary_maps = []
+        #pbar = ProgressBar(len(views))
+        for view, camera_elev, camera_azim, weight in zip(
+            views, camera_elevs, camera_azims, view_weights):
+            project_texture, project_cos_map, project_boundary_map = self.render.back_project(
+                view, camera_elev, camera_azim)
+            project_cos_map = weight * (project_cos_map ** self.bake_exp)
+            project_textures.append(project_texture)
+            project_weighted_cos_maps.append(project_cos_map)
+            project_boundary_maps.append(project_boundary_map)
+            #pbar.update(1)
+
+        if method == 'fast':
+            texture, ori_trust_map = self.render.fast_bake_texture(
+                project_textures, project_weighted_cos_maps)
+        else:
+            raise f'no method {method}'
+        return texture, ori_trust_map > 1E-8              
+        
 
 NODE_CLASS_MAPPINGS = {
     "Hy3DModelLoader": Hy3DModelLoader,
@@ -2726,6 +2992,7 @@ NODE_CLASS_MAPPINGS = {
     "MESHToTrimesh": MESHToTrimesh,
     "Hy3DMeshGeneratorBatch": Hy3DMeshGeneratorBatch,
     "Hy3DSampleMultiViewsBatch": Hy3DSampleMultiViewsBatch,
+    "Hy3DHighPolyToLowPolyApplyTexture": Hy3DHighPolyToLowPolyApplyTexture,
     }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -2766,4 +3033,5 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "MESHToTrimesh": "MESH to Trimesh",
     "Hy3DMeshGeneratorBatch": "Hy3DGenerateMesh from Folder",
     "Hy3DSampleMultiViewsBatch": "Hy3D Sample MultiView from Folder",
+    "Hy3DHighPolyToLowPolyApplyTexture": "Hy3D HighPoly To LowPoly ApplyTexture"
     }
