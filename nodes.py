@@ -69,6 +69,78 @@ comfy_path = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
 
 from .utils import log, print_memory
 
+def pad_image(image, left: int = 0, right: int = 0, top: int = 0, bottom: int = 0, extra_padding: int = 0, color = '0,0,0', pad_mode = 'edge', mask=None, target_width=None, target_height=None):
+    B, H, W, C = image.shape
+    
+    # Resize masks to image dimensions if necessary
+    if mask is not None:
+        BM, HM, WM = mask.shape
+        if HM != H or WM != W:
+            mask = F.interpolate(mask.unsqueeze(1), size=(H, W), mode='nearest-exact').squeeze(1)
+
+    # Parse background color
+    bg_color = [int(x.strip())/255.0 for x in color.split(",")]
+    if len(bg_color) == 1:
+        bg_color = bg_color * 3  # Grayscale to RGB
+    bg_color = torch.tensor(bg_color, dtype=image.dtype, device=image.device)
+    
+    # Calculate padding sizes with extra padding
+    if target_width is not None and target_height is not None:
+        if extra_padding > 0:
+            image = common_upscale(image.movedim(-1, 1), W - extra_padding, H - extra_padding, "lanczos", "disabled").movedim(1, -1)
+            B, H, W, C = image.shape
+
+        padded_width = target_width
+        padded_height = target_height
+        pad_left = (padded_width - W) // 2
+        pad_right = padded_width - W - pad_left
+        pad_top = (padded_height - H) // 2
+        pad_bottom = padded_height - H - pad_top
+    else:
+        pad_left = left + extra_padding
+        pad_right = right + extra_padding
+        pad_top = top + extra_padding
+        pad_bottom = bottom + extra_padding
+
+        padded_width = W + pad_left + pad_right
+        padded_height = H + pad_top + pad_bottom
+    out_image = torch.zeros((B, padded_height, padded_width, C), dtype=image.dtype, device=image.device)
+    
+    # Fill padded areas
+    for b in range(B):
+        if pad_mode == "edge":
+            # Pad with edge color
+            # Define edge pixels
+            top_edge = image[b, 0, :, :]
+            bottom_edge = image[b, H-1, :, :]
+            left_edge = image[b, :, 0, :]
+            right_edge = image[b, :, W-1, :]
+
+            # Fill borders with edge colors
+            out_image[b, :pad_top, :, :] = top_edge.mean(dim=0)
+            out_image[b, pad_top+H:, :, :] = bottom_edge.mean(dim=0)
+            out_image[b, :, :pad_left, :] = left_edge.mean(dim=0)
+            out_image[b, :, pad_left+W:, :] = right_edge.mean(dim=0)
+            out_image[b, pad_top:pad_top+H, pad_left:pad_left+W, :] = image[b]
+        else:
+            # Pad with specified background color
+            out_image[b, :, :, :] = bg_color.unsqueeze(0).unsqueeze(0)  # Expand for H and W dimensions
+            out_image[b, pad_top:pad_top+H, pad_left:pad_left+W, :] = image[b]
+
+    
+    if mask is not None:
+        out_masks = torch.nn.functional.pad(
+            mask, 
+            (pad_left, pad_right, pad_top, pad_bottom),
+            mode='replicate'
+        )
+    else:
+        out_masks = torch.ones((B, padded_height, padded_width), dtype=image.dtype, device=image.device)
+        for m in range(B):
+            out_masks[m, pad_top:pad_top+H, pad_left:pad_left+W] = 0.0
+
+    return (out_image, out_masks)
+
 def get_picture_files(folder_path):
     """
     Retrieves all picture files (based on common extensions) from a given folder.
@@ -2049,7 +2121,9 @@ class Hy3DMeshGeneratorBatch:
                 "num_chunks": ("INT", {"default": 8000, "min": 1, "max": 10000000, "step": 1, "tooltip": "Number of chunks to process at once, higher values use more memory, but make the process faster"}),
                 "mc_level": ("FLOAT", {"default": 0, "min": -1.0, "max": 1.0, "step": 0.0001}),
                 "mc_algo": (["mc", "dmc"], {"default": "mc"}),
-                "enable_flash_vdm": ("BOOLEAN", {"default": True}),                
+                "enable_flash_vdm": ("BOOLEAN", {"default": True}),
+                "left_padding": ("INT",{"default":64, "min":0, "max":512}),
+                "right_padding": ("INT", {"default":64, "min":0, "max": 512}),
             },
         }
 
@@ -2059,7 +2133,7 @@ class Hy3DMeshGeneratorBatch:
     CATEGORY = "Hunyuan3DWrapper" 
     OUTPUT_NODE = True
     
-    def process(self, input_images_folder, output_meshes_folder, remove_background, skip_generated_mesh, file_format, dit_model, attention_mode, cublas_ops, guidance_scale, steps, seed, generate_random_seed, simplify, target_face_num, scheduler, box_v, octree_resolution, num_chunks, mc_level, mc_algo, enable_flash_vdm):
+    def process(self, input_images_folder, output_meshes_folder, remove_background, skip_generated_mesh, file_format, dit_model, attention_mode, cublas_ops, guidance_scale, steps, seed, generate_random_seed, simplify, target_face_num, scheduler, box_v, octree_resolution, num_chunks, mc_level, mc_algo, enable_flash_vdm, left_padding, right_padding):
         device = mm.get_torch_device()
         offload_device=mm.unet_offload_device()
         
@@ -2108,6 +2182,10 @@ class Hy3DMeshGeneratorBatch:
                         file = temp_output_path
                         
                     image, mask = get_image_with_mask(file)
+                    
+                    if left_padding>0 or right_padding>0:
+                        image,mask = pad_image(image=image, left=left_padding, right=right_padding, mask=mask)
+                    
                     mask = 1.0 - mask # Invert Mask
                     
                     image = image.permute(0, 3, 1, 2).to(device)
