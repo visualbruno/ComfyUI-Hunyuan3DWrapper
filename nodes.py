@@ -2657,9 +2657,9 @@ class Hy3DSampleMultiViewsBatch:
                                 
                             texture_np = cv2.inpaint(texture_np,mask_np,inpaint_radius,inpaint_algo)                           
                             
-                            inpaint_texture_pil = Image.fromarray(texture_np)
-                            inpaint_texture_output_path = os.path.join(output_mesh_folder, 'texture.png')
-                            inpaint_texture_pil.save(inpaint_texture_output_path)
+                            # inpaint_texture_pil = Image.fromarray(texture_np)
+                            # inpaint_texture_output_path = os.path.join(output_mesh_folder, 'texture.png')
+                            # inpaint_texture_pil.save(inpaint_texture_output_path)
                             
                             #Apply Texture
                             texture_tensor = torch.from_numpy(texture_np).float() / 255.0
@@ -3336,9 +3336,9 @@ class Hy3DSampleMultiViewsBatchWithMetaData:
                                 
                             texture_np = cv2.inpaint(texture_np,mask_np,inpaint_radius,inpaint_algo)                           
                             
-                            inpaint_texture_pil = Image.fromarray(texture_np)
-                            inpaint_texture_output_path = os.path.join(output_mesh_folder, 'texture.png')
-                            inpaint_texture_pil.save(inpaint_texture_output_path)
+                            # inpaint_texture_pil = Image.fromarray(texture_np)
+                            # inpaint_texture_output_path = os.path.join(output_mesh_folder, 'texture.png')
+                            # inpaint_texture_pil.save(inpaint_texture_output_path)
                             
                             #Apply Texture
                             texture_tensor = torch.from_numpy(texture_np).float() / 255.0
