@@ -12,6 +12,7 @@ import gc
 import node_helpers
 import cv2
 import copy
+import json
 from cv2.ximgproc import guidedFilter
 
 from .hy3dgen.shapegen import Hunyuan3DDiTFlowMatchingPipeline, FaceReducer, FloaterRemover, DegenerateFaceRemover
@@ -69,6 +70,28 @@ script_directory = os.path.dirname(os.path.abspath(__file__))
 comfy_path = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
 
 from .utils import log, print_memory
+
+def get_folders_os(path):
+    """
+    Returns a list of all immediate subdirectories (folders) within the given path.
+
+    Args:
+        path (str): The path to search for folders.
+
+    Returns:
+        list: A list of strings, where each string is the name of a folder.
+              Returns an empty list if the path does not exist or contains no folders.
+    """
+    if not os.path.isdir(path):
+        print(f"Error: Path '{path}' does not exist or is not a directory.")
+        return []
+
+    folders = []
+    for item in os.listdir(path):
+        item_path = os.path.join(path, item)
+        if os.path.isdir(item_path):
+            folders.append(item)
+    return folders
 
 def parse_string_to_int_list(number_string):
   """
@@ -296,6 +319,13 @@ def enhance(images: torch.Tensor, filter_radius: int = 2, sigma: float = 0.1, de
     torch_images = torch.from_numpy(dup)
     
     return torch_images
+    
+class MetaData:
+    def __init__(self):
+        self.camera_config = None
+        self.albedos = None
+        self.albedos_upscaled = None
+        self.mesh_file = None    
 
 class ComfyProgressCallback:
     def __init__(self, total_steps):
@@ -2951,7 +2981,707 @@ class Hy3DHighPolyToLowPolyApplyTexture:
                 project_textures, project_weighted_cos_maps)
         else:
             raise f'no method {method}'
-        return texture, ori_trust_map > 1E-8              
+        return texture, ori_trust_map > 1E-8
+
+class Hy3DSampleMultiViewsBatchWithMetaData:     
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "input_images_folder": ("STRING",),
+                "input_meshes_folder": ("STRING",),
+                "output_folder": ("STRING",),
+                "remove_background": ("BOOLEAN",{"default":False}),
+                "skip_generated_mesh": ("BOOLEAN",{"default":True}),
+                "file_format": (["glb", "obj"],),
+                "model": (["hunyuan3d-paint-v2-0", "hunyuan3d-paint-v2-0-turbo"],),
+                "scheduler": (available_schedulers,
+                    {
+                        "default": 'Euler A'
+                    }),
+                "sigmas": (["default", "karras", "exponential", "beta"],),
+                "camera_config": ("HY3DCAMERA",),
+                "render_size": ("INT", {"default": 1024, "min": 64, "max": 4096, "step": 16}),
+                "texture_size": ("INT", {"default": 1024, "min": 64, "max": 4096, "step": 16}),                
+                "normal_space": (["world", "tangent"], {"default": "world"}),
+                "view_size": ("INT", {"default": 1024, "min": 64, "max": 4096, "step": 16}),
+                "steps": ("INT", {"default": 10, "min": 1}),
+                "seed": ("INT", {"default": 0, "min": 0, "max": 0x7fffffff}),
+                "generate_random_seed": ("BOOLEAN",{"default":True}),
+                "denoise_strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.01}),
+                "inpaint_method": (["ns", "telea"], {"default": "ns"}),
+                "inpaint_radius": ("INT", {"default": 3, "min": 1, "max": 10, "step": 1}),
+                "upscale_multiviews": (["None","CustomModel"],),
+                "upscale_model_name": (folder_paths.get_filename_list("upscale_models"), ),
+                "enhance_multiviews_details": ("BOOLEAN", {"default":False}),
+            },
+        }
+
+    RETURN_TYPES = ("STRING",)
+    RETURN_NAMES = ("output_meshes_folder",)
+    FUNCTION = "process"
+    CATEGORY = "Hunyuan3DWrapper" 
+    OUTPUT_NODE = True
+    
+    def process(self, input_images_folder, input_meshes_folder, output_folder, remove_background, skip_generated_mesh, file_format, model, scheduler, sigmas, camera_config, render_size, texture_size, normal_space, view_size, steps, seed, generate_random_seed, denoise_strength, inpaint_method, inpaint_radius, upscale_multiviews, upscale_model_name, enhance_multiviews_details):
+        device = mm.get_torch_device()
+        offload_device = mm.unet_offload_device()
+        rembg = BackgroundRemover()
+
+        if input_images_folder != None and input_meshes_folder != None:
+            files = get_picture_files(input_images_folder)
+            nb_pictures = len(files)
+
+            if nb_pictures>0:            
+                download_path = os.path.join(folder_paths.models_dir,"diffusers")
+                model_path = os.path.join(download_path, model)
+                
+                if not os.path.exists(model_path):
+                    log.info(f"Downloading model to: {model_path}")
+                    from huggingface_hub import snapshot_download
+                    snapshot_download(
+                        repo_id="tencent/Hunyuan3D-2",
+                        allow_patterns=[f"*{model}*"],
+                        ignore_patterns=["*unet/diffusion_pytorch_model.bin", "*image_encoder*"],
+                        local_dir=download_path,
+                        local_dir_use_symlinks=False,
+                    )
+
+                torch_dtype = torch.float16
+                config_path = os.path.join(model_path, 'unet', 'config.json')
+                unet_ckpt_path_safetensors = os.path.join(model_path, 'unet','diffusion_pytorch_model.safetensors')
+                unet_ckpt_path_bin = os.path.join(model_path, 'unet','diffusion_pytorch_model.bin')
+
+                if not os.path.exists(config_path):
+                    raise FileNotFoundError(f"Config not found at {config_path}")
+                
+
+                with open(config_path, 'r', encoding='utf-8') as file:
+                    config = json.load(file)
+
+                with init_empty_weights():
+                    unet = UNet2DConditionModel(**config)
+                    unet = UNet2p5DConditionModel(unet)
+
+                # Try loading safetensors first, fall back to .bin
+                if os.path.exists(unet_ckpt_path_safetensors):
+                    import safetensors.torch
+                    unet_sd = safetensors.torch.load_file(unet_ckpt_path_safetensors)
+                elif os.path.exists(unet_ckpt_path_bin):
+                    unet_sd = torch.load(unet_ckpt_path_bin, map_location='cpu', weights_only=True)
+                else:
+                    raise FileNotFoundError(f"No checkpoint found at {unet_ckpt_path_safetensors} or {unet_ckpt_path_bin}")
+
+                #unet.load_state_dict(unet_ckpt, strict=True)
+                for name, param in unet.named_parameters():
+                    set_module_tensor_to_device(unet, name, device=offload_device, dtype=torch_dtype, value=unet_sd[name])
+
+                vae = AutoencoderKL.from_pretrained(model_path, subfolder="vae", device=device, torch_dtype=torch_dtype)
+                clip = CLIPTextModel.from_pretrained(model_path, subfolder="text_encoder", torch_dtype=torch_dtype)
+                tokenizer = CLIPTokenizer.from_pretrained(model_path, subfolder="tokenizer")
+                default_scheduler = EulerAncestralDiscreteScheduler.from_pretrained(model_path, subfolder="scheduler")
+                feature_extractor = CLIPImageProcessor.from_pretrained(model_path, subfolder="feature_extractor")
+
+                pipeline = HunyuanPaintPipeline(
+                    unet=unet,
+                    vae = vae,
+                    text_encoder=clip,
+                    tokenizer=tokenizer,
+                    scheduler=default_scheduler,
+                    feature_extractor=feature_extractor,
+                    )
+                    
+                pipeline.enable_model_cpu_offload()
+                
+                scheduler_config = dict(pipeline.scheduler.config)
+                
+                if scheduler in scheduler_mapping:
+                    if scheduler == "DPM++SDE":
+                        scheduler_config["algorithm_type"] = "sde-dpmsolver++"
+                    else:
+                        scheduler_config.pop("algorithm_type", None)
+                    if sigmas == "default":
+                        scheduler_config["use_karras_sigmas"] = False
+                        scheduler_config["use_exponential_sigmas"] = False
+                        scheduler_config["use_beta_sigmas"] = False
+                    elif sigmas == "karras":
+                        scheduler_config["use_karras_sigmas"] = True
+                        scheduler_config["use_exponential_sigmas"] = False
+                        scheduler_config["use_beta_sigmas"] = False
+                    elif sigmas == "exponential":
+                        scheduler_config["use_karras_sigmas"] = False
+                        scheduler_config["use_exponential_sigmas"] = True
+                        scheduler_config["use_beta_sigmas"] = False
+                    elif sigmas == "beta":
+                        scheduler_config["use_karras_sigmas"] = False
+                        scheduler_config["use_exponential_sigmas"] = False
+                        scheduler_config["use_beta_sigmas"] = True
+                    noise_scheduler = scheduler_mapping[scheduler].from_config(scheduler_config)
+                else:
+                    raise ValueError(f"Unknown scheduler: {scheduler}")
+
+                selected_camera_azims = camera_config["selected_camera_azims"]
+                selected_camera_elevs = camera_config["selected_camera_elevs"]
+                selected_view_weights = camera_config["selected_view_weights"]
+                camera_distance = camera_config["camera_distance"]
+                ortho_scale = camera_config["ortho_scale"]
+                
+                camera_info = [(((azim // 30) + 9) % 12) // {-90: 3, -45: 2, -20: 1, 0: 1, 20: 1, 45: 2, 90: 3}[
+                    elev] + {-90: 36, -45: 30, -20: 0, 0: 12, 20: 24, 45: 30, 90: 40}[elev] for azim, elev in
+                            zip(selected_camera_azims, selected_camera_elevs)]                
+
+                pbar = ProgressBar(nb_pictures)
+                for file in files:
+                    image_name = get_filename_without_extension_os_path(file)                    
+                    input_meshes = get_mesh_files(input_meshes_folder, image_name)
+                    
+                    if len(input_meshes)>0:
+                        if len(input_meshes)>1:
+                            print(f'Warning: Multiple meshes found for input_image {image_name} -> Taking the first one')                    
+                    
+                        output_file_name = get_filename_without_extension_os_path(file)
+                        output_mesh_folder = os.path.join(output_folder, output_file_name)
+                        output_glb_path = Path(output_mesh_folder, f'{output_file_name}.{file_format}')
+                    
+                        processMesh = True
+                        
+                        if skip_generated_mesh and os.path.exists(output_glb_path):
+                            processMesh = False
+
+                        if processMesh:    
+                            self.render = MeshRender(
+                                default_resolution=render_size,
+                                texture_size=texture_size,
+                                camera_distance=camera_distance,
+                                ortho_scale=ortho_scale) 
+                                
+                            metadata = MetaData()                            
+                            os.makedirs(output_mesh_folder, exist_ok=True)                            
+                            
+                            if generate_random_seed:
+                                seed = int.from_bytes(os.urandom(4), 'big')    
+
+                            generator=torch.Generator(device=pipeline.device).manual_seed(seed)                                
+                            
+                            print(f'Processing {file} with {input_meshes[0]} ...')    
+                            
+                            trimesh = Trimesh.load(input_meshes[0], force="mesh")  
+                            
+                            print('Unwrapping mesh ...')
+                            from .hy3dgen.texgen.utils.uv_warp_utils import mesh_uv_wrap
+                            trimesh = mesh_uv_wrap(trimesh)
+                            
+                            self.render.load_mesh(trimesh)
+
+                            if normal_space == "world":
+                                normal_maps, masks = self.render_normal_multiview(
+                                    selected_camera_elevs, selected_camera_azims, use_abs_coor=True)
+                            elif normal_space == "tangent":
+                                normal_maps, masks = self.render_normal_multiview(
+                                    selected_camera_elevs, selected_camera_azims, bg_color=[0, 0, 0], use_abs_coor=False)                               
+                            
+                            position_maps = self.render_position_multiview(
+                                selected_camera_elevs, selected_camera_azims)
+
+                            if remove_background:
+                                ref_image = Image.open(file)   
+                                print('Removing background ...')
+                                ref_image = rembg(ref_image)
+                                temp_output_path = os.path.join(comfy_path, "temp", "temp_image.png")
+                                ref_image.save(temp_output_path)
+                                file = temp_output_path
+
+                            ref_image = Image.open(file)
+                            
+                            control_images = normal_maps + position_maps
+                            for i in range(len(control_images)):
+                                control_images[i] = control_images[i].resize((view_size, view_size))
+                                if control_images[i].mode == 'L':
+                                    control_images[i] = control_images[i].point(lambda x: 255 if x > 1 else 0, mode='1')  
+
+                            num_view = len(control_images) // 2
+                            normal_image = [[control_images[i] for i in range(num_view)]]
+                            position_image = [[control_images[i + num_view] for i in range(num_view)]]
+
+                            callback = ComfyProgressCallback(total_steps=steps)
+
+                            if not hasattr(self, "default_scheduler"):
+                                self.default_scheduler = pipeline.scheduler
+                            pipeline.scheduler = noise_scheduler
+
+                            ref_image = ref_image.convert("RGB")
+                            ref_image = pil2tensor(ref_image)
+                            ref_image = ref_image.permute(0, 3, 1, 2).unsqueeze(0).to(device)                  
+
+                            # Sample MultiViews
+                            multiview_images = pipeline(
+                                ref_image,
+                                width=view_size,
+                                height=view_size,
+                                generator=generator,
+                                latents=None,
+                                num_in_batch = num_view,
+                                camera_info_gen = [camera_info],
+                                camera_info_ref = [[0]],
+                                normal_imgs = normal_image,
+                                position_imgs = position_image,
+                                num_inference_steps=steps,
+                                output_type="pt",
+                                callback_on_step_end=callback,
+                                callback_on_step_end_tensor_inputs=["latents", "prompt_embeds", "negative_prompt_embeds"],
+                                denoise_strength=denoise_strength
+                                ).images                                                        
+                            
+                            multiviews_pil = []
+                            
+                            if enhance_multiviews_details:
+                                print('Enhancing MultiViews ...')
+                                multiviews_tensor = []
+                                for index, img in enumerate(multiview_images):
+                                    multiviews_tensor.append(enhance(img.float()))
+                                
+                                multiview_images = torch.stack(multiviews_tensor)
+                            
+                            metadata.albedos = []
+                            
+                            for index, img in enumerate(multiview_images):                                    
+                                pil_image = tensor2pil(img)                              
+                                multiviews_pil.append(pil_image)
+                                
+                                image_output_path = os.path.join(output_mesh_folder, f'MV_{index}.png')
+                                pil_image.save(image_output_path)
+                                metadata.albedos.append(f'MV_{index}.png')
+
+                            if upscale_multiviews == "CustomModel":
+                                print('Upscaling MultiViews ...')
+                                model_path = folder_paths.get_full_path_or_raise("upscale_models", upscale_model_name)
+                                sd = comfy.utils.load_torch_file(model_path, safe_load=True)
+                                if "module.layers.0.residual_group.blocks.0.norm1.weight" in sd:
+                                    sd = comfy.utils.state_dict_prefix_replace(sd, {"module.":""})
+                                upscale_model = ModelLoader().load_from_state_dict(sd).eval()
+
+                                if not isinstance(upscale_model, ImageModelDescriptor):
+                                    print("Cannot Upscale: Upscale model must be a single-image model.")
+                                    del upscale_model
+                                    upscale_model = None
+                                else:
+                                    upscale_model.to(device)
+                                
+                                if upscale_model != None:       
+                                    in_img = multiview_images.to(device)
+                                    
+                                    tile = 512
+                                    overlap = 32
+
+                                    oom = True
+                                    while oom:
+                                        try:
+                                            steps = in_img.shape[0] * comfy.utils.get_tiled_scale_steps(in_img.shape[3], in_img.shape[2], tile_x=tile, tile_y=tile, overlap=overlap)
+                                            pbar = comfy.utils.ProgressBar(steps)
+                                            s = comfy.utils.tiled_scale(in_img, lambda a: upscale_model(a), tile_x=tile, tile_y=tile, overlap=overlap, upscale_amount=upscale_model.scale, pbar=pbar)
+                                            oom = False
+                                        except mm.OOM_EXCEPTION as e:
+                                            tile //= 2
+                                            if tile < 128:
+                                                raise e
+
+                                    #upscale_model.to("cpu")
+                                    
+                                    multiviews_pil = convert_tensor_images_to_pil(s)
+
+                                    metadata.albedos_upscaled = []
+                                    
+                                    for index, img in enumerate(multiviews_pil):
+                                        image_output_path = os.path.join(output_mesh_folder, f'UpscaledMV_{index}.png')
+                                        img.save(image_output_path)
+                                        metadata.albedos_upscaled.append(f'UpscaledMV_{index}.png')
+
+                            # Bake From MultiViews
+                            merge_method = 'fast'
+                            self.bake_exp = 4
+                            
+                            texture, mask = self.bake_from_multiview(multiviews_pil,
+                                                                     selected_camera_elevs, selected_camera_azims, selected_view_weights,
+                                                                     method=merge_method)
+                                                        
+                            mask = mask.squeeze(-1).cpu().float()
+                            texture = texture.unsqueeze(0).cpu().float()      
+
+                            #Vertice Inpaint Texture
+                            from .hy3dgen.texgen.differentiable_renderer.mesh_processor import meshVerticeInpaint
+                            vtx_pos, pos_idx, vtx_uv, uv_idx = self.render.get_mesh()
+
+                            mask_np = (mask.squeeze(-1).squeeze(0).cpu().numpy() * 255).astype(np.uint8)
+                            texture_np = texture.squeeze(0).cpu().numpy() * 255
+
+                            texture_np, mask_np = meshVerticeInpaint(texture_np, mask_np, vtx_pos, vtx_uv, pos_idx, uv_idx)                                                      
+                            texture_np = texture_np.astype(np.uint8)
+                            
+                            texture_tensor = torch.from_numpy(texture_np).float() / 255.0
+                            texture_tensor = texture_tensor.unsqueeze(0)
+
+                            mask_tensor = torch.from_numpy(mask_np).float() / 255.0
+                            mask_tensor = mask_tensor.unsqueeze(0)                            
+                            
+                            #CV2 Inpaint
+                            import cv2
+                            mask_tensor = 1 - mask_tensor
+                            mask_np = (mask_tensor.squeeze(-1).squeeze(0).cpu().numpy() * 255).astype(np.uint8)
+                            texture_np = (texture_tensor.squeeze(0).cpu().numpy() * 255).astype(np.uint8)                            
+
+                            if inpaint_method == "ns":
+                                inpaint_algo = cv2.INPAINT_NS
+                            elif inpaint_method == "telea":
+                                inpaint_algo = cv2.INPAINT_TELEA
+                                
+                            texture_np = cv2.inpaint(texture_np,mask_np,inpaint_radius,inpaint_algo)                           
+                            
+                            inpaint_texture_pil = Image.fromarray(texture_np)
+                            inpaint_texture_output_path = os.path.join(output_mesh_folder, 'texture.png')
+                            inpaint_texture_pil.save(inpaint_texture_output_path)
+                            
+                            #Apply Texture
+                            texture_tensor = torch.from_numpy(texture_np).float() / 255.0
+                            texture_tensor = texture_tensor.unsqueeze(0)
+                            texture_tensor = texture_tensor.squeeze(0)
+                            self.render.set_texture(texture_tensor)
+                            textured_mesh = self.render.save_mesh()    
+
+                            textured_mesh.export(output_glb_path, file_type=file_format)
+                            
+                            metadata.mesh_file = f'{output_file_name}.{file_format}'
+                            metadata.camera_config = camera_config
+                            
+                            output_metadata_path = os.path.join(output_mesh_folder,'meta_data.json')
+                            with open(output_metadata_path,'w') as fw:
+                                json.dump(metadata.__dict__, indent="\t", fp=fw)                              
+                            
+                            del self.render
+                        else:
+                            print(f'Skipping {file}')                             
+                    else:
+                        print(f'Error: No mesh found for input image {image_name}')  
+                    
+                    mm.soft_empty_cache()
+                    torch.cuda.empty_cache()
+                    gc.collect()                     
+
+                    pbar.update(1)
+            else:
+                print('No image found in input_images_folder')
+        else:
+            print('Nothing to process')
+
+        return output_folder,
+        
+    def render_normal_multiview(self, camera_elevs, camera_azims, use_abs_coor=True, bg_color=[1, 1, 1]):
+        normal_maps = []
+        masks = []
+        for elev, azim in zip(camera_elevs, camera_azims):
+            normal_map, mask = self.render.render_normal(
+                elev, azim, bg_color=bg_color, use_abs_coor=use_abs_coor, return_type='pl')
+            normal_maps.append(normal_map)
+            masks.append(mask)
+
+        return normal_maps, masks
+
+    def render_position_multiview(self, camera_elevs, camera_azims):
+        position_maps = []
+        for elev, azim in zip(camera_elevs, camera_azims):
+            position_map = self.render.render_position(
+                elev, azim, return_type='pl')
+            position_maps.append(position_map)
+
+        return position_maps     
+
+    def bake_from_multiview(self, views, camera_elevs,
+                            camera_azims, view_weights, method='graphcut'):
+        project_textures, project_weighted_cos_maps = [], []
+        project_boundary_maps = []
+        #pbar = ProgressBar(len(views))
+        for view, camera_elev, camera_azim, weight in zip(
+            views, camera_elevs, camera_azims, view_weights):
+            project_texture, project_cos_map, project_boundary_map = self.render.back_project(
+                view, camera_elev, camera_azim)
+            project_cos_map = weight * (project_cos_map ** self.bake_exp)
+            project_textures.append(project_texture)
+            project_weighted_cos_maps.append(project_cos_map)
+            project_boundary_maps.append(project_boundary_map)
+            #pbar.update(1)
+
+        if method == 'fast':
+            texture, ori_trust_map = self.render.fast_bake_texture(
+                project_textures, project_weighted_cos_maps)
+        else:
+            raise f'no method {method}'
+        return texture, ori_trust_map > 1E-8      
+
+class Hy3DHighPolyToLowPolyBatchWithMetaData:     
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "input_folder": ("STRING",),
+                "render_size": ("INT", {"default": 1024, "min": 64, "max": 4096, "step": 16}),
+                "texture_size": ("INT", {"default": 1024, "min": 64, "max": 4096, "step": 16}),                
+                "normal_space": (["world", "tangent"], {"default": "world"}),
+                "file_format": (["glb", "obj"],),
+                "target_face_nums": ("STRING",{"default":"20000,10000,5000"}),
+                "inpaint_method": (["ns", "telea"], {"default": "ns"}),
+                "inpaint_radius": ("INT", {"default": 3, "min": 1, "max": 10, "step": 1}),                
+            },
+        }
+
+    RETURN_TYPES = ("STRING",)
+    RETURN_NAMES = ("input_folder",)
+    FUNCTION = "process"
+    CATEGORY = "Hunyuan3DWrapper" 
+    OUTPUT_NODE = True
+    
+    def process(self, input_folder, render_size, texture_size, normal_space, file_format, target_face_nums, inpaint_method, inpaint_radius):
+        device = mm.get_torch_device()
+        offload_device = mm.unet_offload_device()
+
+        if os.path.exists(input_folder):
+            subFolders = get_folders_os(input_folder)
+            
+            if len(subFolders)>0:
+                
+                list_of_faces = parse_string_to_int_list(target_face_nums)
+                
+                if len(list_of_faces)>0:
+                    pbar = ProgressBar(len(subFolders))
+                    for subFolder in subFolders:
+                        subFolder = os.path.join(input_folder, subFolder)
+                        metadata_file_path = os.path.join(subFolder, "meta_data.json")
+                        if os.path.exists(metadata_file_path):
+                            with open(metadata_file_path, 'r') as fr:
+                                loaded_data = json.load(fr)
+                                loaded_metaData = MetaData()
+                                for key, value in loaded_data.items():
+                                    setattr(loaded_metaData, key, value)
+
+                            mesh_file_path = os.path.join(subFolder, loaded_metaData.mesh_file)
+                            if os.path.exists(mesh_file_path):
+                                print(f'Processing {subFolder} ...')
+                                
+                                highpoly_mesh = Trimesh.load(mesh_file_path, force="mesh")
+                                highpoly_mesh = Trimesh.Trimesh(vertices=highpoly_mesh.vertices, faces=highpoly_mesh.faces) # Remove texture coordinates
+                                current_faces_num = len(highpoly_mesh.faces)
+                                
+                                selected_camera_azims = loaded_metaData.camera_config["selected_camera_azims"]
+                                selected_camera_elevs = loaded_metaData.camera_config["selected_camera_elevs"]
+                                selected_view_weights = loaded_metaData.camera_config["selected_view_weights"]                                
+                                camera_distance = loaded_metaData.camera_config["camera_distance"]
+                                ortho_scale = loaded_metaData.camera_config["ortho_scale"]  
+
+                                self.render = MeshRender(
+                                    default_resolution=render_size,
+                                    texture_size=texture_size,
+                                    camera_distance=camera_distance,
+                                    ortho_scale=ortho_scale)                                
+                                
+                                lowpoly_meshes_folder = os.path.join(subFolder, "LowPoly")
+                                
+                                for target_face_num in list_of_faces:
+                                    try:
+                                        import meshlib.mrmeshpy as mrmeshpy
+                                    except ImportError:
+                                        raise ImportError("meshlib not found. Please install it using 'pip install meshlib'")                    
+                                    
+                                    settings = mrmeshpy.DecimateSettings()
+                                    faces_to_delete = current_faces_num - target_face_num
+                                    settings.maxDeletedFaces = faces_to_delete                        
+                                    settings.packMesh = True
+                                    
+                                    print(f'Decimating to {target_face_num} ...')
+                                    lowpoly_mesh = postprocessmesh(highpoly_mesh.vertices, highpoly_mesh.faces, settings)  
+                                    
+                                    #print('Unwrapping mesh ...')
+                                    from .hy3dgen.texgen.utils.uv_warp_utils import mesh_uv_wrap
+                                    lowpoly_mesh = mesh_uv_wrap(lowpoly_mesh)
+                                    
+                                    self.render.load_mesh(lowpoly_mesh)
+
+                                    if normal_space == "world":
+                                        normal_maps, masks = self.render_normal_multiview(
+                                            selected_camera_elevs, selected_camera_azims, use_abs_coor=True)
+                                    elif normal_space == "tangent":
+                                        normal_maps, masks = self.render_normal_multiview(
+                                            selected_camera_elevs, selected_camera_azims, bg_color=[0, 0, 0], use_abs_coor=False)                               
+                                    
+                                    position_maps = self.render_position_multiview(
+                                        selected_camera_elevs, selected_camera_azims)     
+
+                                    multiviews_pil = []
+                                    if loaded_metaData.albedos_upscaled != None:
+                                        print('Using upscaled pictures ...')
+                                        for img_file in loaded_metaData.albedos_upscaled:
+                                            image_file_path = os.path.join(subFolder, img_file)
+                                            image = Image.open(image_file_path)
+                                            multiviews_pil.append(image)
+                                    else:
+                                        for img_file in loaded_metaData.albedos:
+                                            image_file_path = os.path.join(subFolder, img_file)
+                                            image = Image.open(image_file_path)
+                                            multiviews_pil.append(image)                                        
+
+                                    # Bake From MultiViews
+                                    merge_method = 'fast'
+                                    self.bake_exp = 4
+                                    
+                                    texture, mask = self.bake_from_multiview(multiviews_pil,
+                                                                             selected_camera_elevs, selected_camera_azims, selected_view_weights,
+                                                                             method=merge_method)
+                                                                
+                                    mask = mask.squeeze(-1).cpu().float()
+                                    texture = texture.unsqueeze(0).cpu().float()                             
+
+                                    #Vertice Inpaint Texture
+                                    from .hy3dgen.texgen.differentiable_renderer.mesh_processor import meshVerticeInpaint
+                                    vtx_pos, pos_idx, vtx_uv, uv_idx = self.render.get_mesh()
+
+                                    mask_np = (mask.squeeze(-1).squeeze(0).cpu().numpy() * 255).astype(np.uint8)
+                                    texture_np = texture.squeeze(0).cpu().numpy() * 255
+
+                                    texture_np, mask_np = meshVerticeInpaint(texture_np, mask_np, vtx_pos, vtx_uv, pos_idx, uv_idx)                                                      
+                                    texture_np = texture_np.astype(np.uint8)
+                                    
+                                    texture_tensor = torch.from_numpy(texture_np).float() / 255.0
+                                    texture_tensor = texture_tensor.unsqueeze(0)
+
+                                    mask_tensor = torch.from_numpy(mask_np).float() / 255.0
+                                    mask_tensor = mask_tensor.unsqueeze(0)                            
+                                    
+                                    #CV2 Inpaint
+                                    import cv2
+                                    mask_tensor = 1 - mask_tensor
+                                    mask_np = (mask_tensor.squeeze(-1).squeeze(0).cpu().numpy() * 255).astype(np.uint8)
+                                    texture_np = (texture_tensor.squeeze(0).cpu().numpy() * 255).astype(np.uint8)                            
+
+                                    if inpaint_method == "ns":
+                                        inpaint_algo = cv2.INPAINT_NS
+                                    elif inpaint_method == "telea":
+                                        inpaint_algo = cv2.INPAINT_TELEA
+                                        
+                                    texture_np = cv2.inpaint(texture_np,mask_np,inpaint_radius,inpaint_algo)                           
+                                    
+                                    # inpaint_texture_pil = Image.fromarray(texture_np)
+                                    # inpaint_texture_output_path = os.path.join(output_mesh_folder, 'texture.png')
+                                    # inpaint_texture_pil.save(inpaint_texture_output_path)
+                                    
+                                    #Apply Texture
+                                    texture_tensor = torch.from_numpy(texture_np).float() / 255.0
+                                    texture_tensor = texture_tensor.unsqueeze(0)
+                                    texture_tensor = texture_tensor.squeeze(0)
+                                    self.render.set_texture(texture_tensor)
+                                    output_mesh = self.render.save_mesh()    
+                                    
+                                    mesh_file_name = get_filename_without_extension_os_path(mesh_file_path)
+                                    
+                                    output_lowpoly_mesh_folder = os.path.join(lowpoly_meshes_folder,f'{target_face_num}')
+                                    os.makedirs(output_lowpoly_mesh_folder, exist_ok=True) 
+                                    output_glb_path = os.path.join(output_lowpoly_mesh_folder,f'{mesh_file_name}_{target_face_num}.{file_format}')
+                                    
+                                    output_mesh.export(output_glb_path, file_type=file_format)
+
+                                del self.render
+                                mm.soft_empty_cache()
+                                torch.cuda.empty_cache()
+                                gc.collect()                                  
+                            else:
+                                print(f'Mesh file does not exist: {mesh_file_path}')
+                        else:
+                            print(f'No meta_data.json found in {subFolder}')
+                            
+                        pbar.update(1)
+                else:
+                    print('target_face_nums is empty')
+            else:
+                print(f'No subfolders found in {input_folder}')
+
+        return input_folder,
+        
+    def get_picture_list(self, file_list):
+        """
+        Returns a list of picture paths based on specific rules:
+        - If 'UpscaledMV' pictures exist, only returns those, ordered by ID.
+        - Otherwise, returns 'MV' pictures, ordered by ID.
+
+        Args:
+            file_list (list): A list of file paths (strings).
+
+        Returns:
+            list: A sorted list of relevant picture paths.
+        """
+        upscaled_mv_pictures = []
+        mv_pictures = []
+
+        for file_path in file_list:
+            filename = os.path.basename(file_path)
+            if filename.startswith("UpscaledMV"):
+                upscaled_mv_pictures.append(file_path)
+            elif filename.startswith("MV"):
+                mv_pictures.append(file_path)
+
+        def get_id(file_path):
+            """Helper function to extract the numeric ID from the filename."""
+            filename = os.path.basename(file_path)
+            parts = filename.split('_')
+            if len(parts) > 1:
+                try:
+                    # Remove the file extension before converting to int
+                    return int(parts[1].split('.')[0])
+                except ValueError:
+                    return -1 # Invalid ID, put it at the end
+            return -1 # No ID found
+
+        if upscaled_mv_pictures:
+            return sorted(upscaled_mv_pictures, key=get_id)
+        else:
+            return sorted(mv_pictures, key=get_id)
+            
+    def render_normal_multiview(self, camera_elevs, camera_azims, use_abs_coor=True, bg_color=[1, 1, 1]):
+        normal_maps = []
+        masks = []
+        for elev, azim in zip(camera_elevs, camera_azims):
+            normal_map, mask = self.render.render_normal(
+                elev, azim, bg_color=bg_color, use_abs_coor=use_abs_coor, return_type='pl')
+            normal_maps.append(normal_map)
+            masks.append(mask)
+
+        return normal_maps, masks
+
+    def render_position_multiview(self, camera_elevs, camera_azims):
+        position_maps = []
+        for elev, azim in zip(camera_elevs, camera_azims):
+            position_map = self.render.render_position(
+                elev, azim, return_type='pl')
+            position_maps.append(position_map)
+
+        return position_maps     
+
+    def bake_from_multiview(self, views, camera_elevs,
+                            camera_azims, view_weights, method='graphcut'):
+        project_textures, project_weighted_cos_maps = [], []
+        project_boundary_maps = []
+        #pbar = ProgressBar(len(views))
+        for view, camera_elev, camera_azim, weight in zip(
+            views, camera_elevs, camera_azims, view_weights):
+            project_texture, project_cos_map, project_boundary_map = self.render.back_project(
+                view, camera_elev, camera_azim)
+            project_cos_map = weight * (project_cos_map ** self.bake_exp)
+            project_textures.append(project_texture)
+            project_weighted_cos_maps.append(project_cos_map)
+            project_boundary_maps.append(project_boundary_map)
+            #pbar.update(1)
+
+        if method == 'fast':
+            texture, ori_trust_map = self.render.fast_bake_texture(
+                project_textures, project_weighted_cos_maps)
+        else:
+            raise f'no method {method}'
+        return texture, ori_trust_map > 1E-8        
         
 
 NODE_CLASS_MAPPINGS = {
@@ -2993,6 +3723,8 @@ NODE_CLASS_MAPPINGS = {
     "Hy3DMeshGeneratorBatch": Hy3DMeshGeneratorBatch,
     "Hy3DSampleMultiViewsBatch": Hy3DSampleMultiViewsBatch,
     "Hy3DHighPolyToLowPolyApplyTexture": Hy3DHighPolyToLowPolyApplyTexture,
+    "Hy3DSampleMultiViewsBatchWithMetaData": Hy3DSampleMultiViewsBatchWithMetaData,
+    "Hy3DHighPolyToLowPolyBatchWithMetaData": Hy3DHighPolyToLowPolyBatchWithMetaData,
     }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -3033,5 +3765,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "MESHToTrimesh": "MESH to Trimesh",
     "Hy3DMeshGeneratorBatch": "Hy3DGenerateMesh from Folder",
     "Hy3DSampleMultiViewsBatch": "Hy3D Sample MultiView from Folder",
-    "Hy3DHighPolyToLowPolyApplyTexture": "Hy3D HighPoly To LowPoly ApplyTexture"
+    "Hy3DHighPolyToLowPolyApplyTexture": "Hy3D HighPoly To LowPoly ApplyTexture",
+    "Hy3DSampleMultiViewsBatchWithMetaData": "Hy3D Sample MultiView from Folder with MetaData",
+    "Hy3DHighPolyToLowPolyBatchWithMetaData": "Hy3D HighPoly To LowPoly Batch from Folder with MetaData"
     }
