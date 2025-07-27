@@ -10,13 +10,13 @@ model:
     depth_single_blocks: 16
     axes_dim: [ 64 ]
     theta: 10000
-    qkv_bias: True
-    guidance_embed: False
+    qkv_bias: true
+    guidance_embed: true
 
 vae:
   target: .hy3dgen.shapegen.models.ShapeVAE
   params:
-    num_latents: 512
+    num_latents: 3072
     embed_dim: 64
     num_freqs: 8
     include_pi: false
@@ -52,17 +52,18 @@ conditioner:
           qkv_bias: true
           torch_dtype: float32
           use_swiglu_ffn: true
-        image_size: 518
+        image_size: 1022
 
 scheduler:
-  target: .hy3dgen.shapegen.schedulers.FlowMatchEulerDiscreteScheduler
+  target: .hy3dgen.shapegen.schedulers.ConsistencyFlowMatchEulerDiscreteScheduler
   params:
     num_train_timesteps: 1000
+    pcm_timesteps: 100
 
 image_processor:
   target: .hy3dgen.shapegen.preprocessors.ImageProcessorV2
   params:
-    size: 512
+    size: 1022
     border_ratio: 0.0
 
 pipeline:

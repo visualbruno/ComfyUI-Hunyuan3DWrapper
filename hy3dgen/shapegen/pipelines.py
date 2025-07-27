@@ -157,7 +157,8 @@ class Hunyuan3DDiTPipeline:
         compile_args=None,
         attention_mode="sdpa",
         cublas_ops=False,
-        scheduler="FlowMatchEulerDiscreteScheduler", 
+        scheduler="FlowMatchEulerDiscreteScheduler",
+        is_mini_turbo=False,
         **kwargs,
     ):
         new_sd = {}
@@ -179,11 +180,17 @@ class Hunyuan3DDiTPipeline:
                 block_num = int(k.split('.')[1])
                 single_block_nums.add(block_num)
     
-        if len(single_block_nums) < 17:
+        if is_mini_turbo:
+            config_path = os.path.join(script_directory, "configs", "dit_config_mini_turbo.yaml")
+            print('using dit_config_mini_turbo.yaml')
+        elif len(single_block_nums) < 17:
             config_path = os.path.join(script_directory, "configs", "dit_config_mini.yaml")
+            print('using dit_config_mini.yaml')
             logger.info(f"Model has {len(single_block_nums)} single blocks, setting config to dit_config_mini.yaml")
         else:
             config_path = os.path.join(script_directory, "configs", "dit_config.yaml")
+            print('using dit_config.yaml')
+            
         with open(config_path, 'r') as f:
             config = yaml.safe_load(f)
 

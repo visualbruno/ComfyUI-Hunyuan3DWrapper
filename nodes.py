@@ -24,7 +24,6 @@ from .hy3dshape.hy3dshape.rembg import BackgroundRemover
 from .hy3dgen.shapegen.meshlib import postprocessmesh
 from .hy3dgen.texgen.differentiable_renderer.mesh_render import MeshRender
 
-
 from diffusers import AutoencoderKL
 from diffusers.schedulers import (
     DDIMScheduler, 
@@ -380,6 +379,7 @@ class Hy3DModelLoader:
         return {
             "required": {
                 "model": (folder_paths.get_filename_list("diffusion_models"), {"tooltip": "These models are loaded from the 'ComfyUI/models/diffusion_models' -folder",}),
+                "is_mini_turbo": ("BOOLEAN",{"default":False}),
             },
             "optional": {
                 "compile_args": ("HY3DCOMPILEARGS", {"tooltip": "torch.compile settings, when connected to the model loader, torch.compile of the selected models is attempted. Requires Triton and torch 2.5.0 is recommended"}),
@@ -393,7 +393,7 @@ class Hy3DModelLoader:
     FUNCTION = "loadmodel"
     CATEGORY = "Hunyuan3DWrapper"
 
-    def loadmodel(self, model, compile_args=None, attention_mode="sdpa", cublas_ops=False):
+    def loadmodel(self, model, is_mini_turbo, compile_args=None, attention_mode="sdpa", cublas_ops=False):
         device = mm.get_torch_device()
         offload_device=mm.unet_offload_device()
 
@@ -405,7 +405,8 @@ class Hy3DModelLoader:
             offload_device=offload_device,
             compile_args=compile_args,
             attention_mode=attention_mode,
-            cublas_ops=cublas_ops)
+            cublas_ops=cublas_ops,
+            is_mini_turbo = is_mini_turbo)
         
         return (pipe, vae,)
     
@@ -1498,9 +1499,11 @@ class Hy3DGenerateMesh:
             torch.cuda.reset_peak_memory_stats(device)
         except:
             pass
+            
+        torch.save(latents,'output/latents.pt')
         
         if not force_offload:
-            pipeline.to(offload_device)
+            pipeline.to(offload_device)        
         
         return (latents, )
     
@@ -3682,7 +3685,6 @@ class Hy3DHighPolyToLowPolyBatchWithMetaData:
         else:
             raise f'no method {method}'
         return texture, ori_trust_map > 1E-8        
-        
 
 NODE_CLASS_MAPPINGS = {
     "Hy3DModelLoader": Hy3DModelLoader,
@@ -3767,5 +3769,5 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "Hy3DSampleMultiViewsBatch": "Hy3D Sample MultiView from Folder",
     "Hy3DHighPolyToLowPolyApplyTexture": "Hy3D HighPoly To LowPoly ApplyTexture",
     "Hy3DSampleMultiViewsBatchWithMetaData": "Hy3D Sample MultiView from Folder with MetaData",
-    "Hy3DHighPolyToLowPolyBatchWithMetaData": "Hy3D HighPoly To LowPoly Batch from Folder with MetaData"
+    "Hy3DHighPolyToLowPolyBatchWithMetaData": "Hy3D HighPoly To LowPoly Batch from Folder with MetaData",
     }
