@@ -1498,9 +1498,7 @@ class Hy3DGenerateMesh:
         try:
             torch.cuda.reset_peak_memory_stats(device)
         except:
-            pass
-            
-        torch.save(latents,'output/latents.pt')
+            pass           
         
         if not force_offload:
             pipeline.to(offload_device)        
