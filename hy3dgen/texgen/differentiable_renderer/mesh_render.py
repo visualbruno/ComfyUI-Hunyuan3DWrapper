@@ -207,7 +207,8 @@ class MeshRender():
         return textc, textd
 
     def raster_texture(self, tex, uv, uv_da=None, mip_level_bias=None, mip=None, filter_mode='auto',
-                       boundary_mode='wrap', max_mip_level=None, elev=None, azim=None, camera_distance=None, resolution=None, scale=1.0):
+                       boundary_mode='wrap', max_mip_level=None, elev=None, azim=None, camera_distance=None, resolution=None, scale=1.0,
+                       blender_exec_path=None):
         with tempfile.NamedTemporaryFile(suffix=".obj", delete=False) as tmp_mesh:
             mesh_path = tmp_mesh.name
             tmp_mesh.close()
@@ -224,7 +225,7 @@ class MeshRender():
         res = resolution[0] if isinstance(resolution, (list, tuple)) else resolution
         
         cmd = [
-            'blender', '-b', '-P', blender_script, '--',
+            blender_exec_path, '-b', '-P', blender_script, '--',
             '--mesh', mesh_path,
             '--output', output_path,
             '--elev', str(elev),
@@ -420,9 +421,10 @@ class MeshRender():
         elev=None,
         azim=None,
         camera_distance=None,
-        scale=1.0
+        scale=1.0,
+        blender_exec_path=None
     ):
-        return self.raster_texture(tex, uv, elev=elev, azim=azim, camera_distance=camera_distance, resolution=resolution, scale=scale)
+        return self.raster_texture(tex, uv, elev=elev, azim=azim, camera_distance=camera_distance, resolution=resolution, scale=scale, blender_exec_path=blender_exec_path)
 
     def render(
         self,
@@ -436,7 +438,8 @@ class MeshRender():
         bgcolor=None,
         filter_mode=None,
         return_type='th',
-        scale=1.0
+        scale=1.0,
+        blender_exec_path=None
     ):
 
         proj = self.camera_proj_mat
@@ -458,7 +461,7 @@ class MeshRender():
                              self.tex if tex is None else tex,
                              self.default_resolution if resolution is None else resolution,
                              self.max_mip_level, True, filter_mode if filter_mode else self.filter_mode,
-                             elev=elev, azim=azim, camera_distance=camera_distance,scale=scale)
+                             elev=elev, azim=azim, camera_distance=camera_distance,scale=scale,blender_exec_path=blender_exec_path)
         mask = (image[..., [-1]] == 1).float()
         if bgcolor is None:
             bgcolor = [0 for _ in range(image.shape[-1] - 1)]
