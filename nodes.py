@@ -781,6 +781,7 @@ class Hy3DRenderMultiView:
                 "trimesh": ("TRIMESH",),
                 "render_size": ("INT", {"default": 1024, "min": 64, "max": 4096, "step": 16}),
                 "texture_size": ("INT", {"default": 1024, "min": 64, "max": 4096, "step": 16}),
+                "generate_textured_maps": ("BOOLEAN", {"default":False, "tooltip":"Uses Blender to generate the views. Put Blender folder in your PATH"}),
             },
             "optional": {
                 "camera_config": ("HY3DCAMERA",),
@@ -788,12 +789,12 @@ class Hy3DRenderMultiView:
             }
         }
 
-    RETURN_TYPES = ("IMAGE", "IMAGE", "MESHRENDER", "MASK",)
-    RETURN_NAMES = ("normal_maps", "position_maps", "renderer", "masks")
+    RETURN_TYPES = ("IMAGE", "IMAGE", "MESHRENDER", "MASK", "IMAGE", )
+    RETURN_NAMES = ("normal_maps", "position_maps", "renderer", "masks", "textured_maps")
     FUNCTION = "process"
     CATEGORY = "Hunyuan3DWrapper"
 
-    def process(self, trimesh, render_size, texture_size, camera_config=None, normal_space="world"):
+    def process(self, trimesh, render_size, texture_size, generate_textured_maps, camera_config=None, normal_space="world"):
         if camera_config is None:
             selected_camera_azims = [0, 90, 180, 270, 0, 180]
             selected_camera_elevs = [0, 0, 0, 0, 90, -90]
@@ -845,7 +846,22 @@ class Hy3DRenderMultiView:
             selected_camera_elevs, selected_camera_azims)
         position_tensors = torch.stack(position_maps, dim=0)
         
-        return (normal_tensors.cpu().float(), position_tensors.cpu().float(), self.render, mask_tensors.squeeze(-1).cpu().float(),)
+        if generate_textured_maps:            
+            if hasattr(trimesh.visual, 'material'):               
+                textured_maps = self.render_textured_multiview(
+                    selected_camera_elevs, selected_camera_azims, ortho_scale, render_size)
+                textured_tensors = torch.stack(textured_maps, dim=0)
+            
+                return (normal_tensors.cpu().float(), position_tensors.cpu().float(), self.render, mask_tensors.squeeze(-1).cpu().float(), textured_tensors.cpu().float(),)
+            else:
+                white_image = Image.new('RGB', (render_size, render_size), color='white')
+                white_image_tensor = pil2tensor(white_image)
+                print("No material data found on this mesh.")
+                return (normal_tensors.cpu().float(), position_tensors.cpu().float(), self.render, mask_tensors.squeeze(-1).cpu().float(), white_image_tensor,)                
+        else:
+            white_image = Image.new('RGB', (render_size, render_size), color='white')
+            white_image_tensor = pil2tensor(white_image)            
+            return (normal_tensors.cpu().float(), position_tensors.cpu().float(), self.render, mask_tensors.squeeze(-1).cpu().float(), white_image_tensor,)
     
     def render_normal_multiview(self, camera_elevs, camera_azims, use_abs_coor=True, bg_color=[1, 1, 1]):
         normal_maps = []
@@ -866,6 +882,15 @@ class Hy3DRenderMultiView:
             position_maps.append(position_map)
 
         return position_maps
+        
+    def render_textured_multiview(self, camera_elevs, camera_azims, scale, resolution):
+        textured_maps = []
+        for elev, azim in zip(camera_elevs, camera_azims):
+            textured_map = self.render.render(
+                elev, azim, filter_mode='linear', return_type='th', scale=scale, resolution=resolution)
+            textured_maps.append(textured_map)
+            
+        return textured_maps
     
 class Hy3DRenderSingleView:
     @classmethod

@@ -28,6 +28,9 @@ import torch
 import torch.nn.functional as F
 import trimesh
 from PIL import Image
+import subprocess
+import tempfile
+import os
 
 from .camera_utils import (
     transform_pos,
@@ -204,14 +207,43 @@ class MeshRender():
         return textc, textd
 
     def raster_texture(self, tex, uv, uv_da=None, mip_level_bias=None, mip=None, filter_mode='auto',
-                       boundary_mode='wrap', max_mip_level=None):
-
-        if self.raster_mode == 'cr':
-            raise f'Texture is not implemented in cr'
-        else:
-            raise f'No raster named {self.raster_mode}'
-
-        return color
+                       boundary_mode='wrap', max_mip_level=None, elev=None, azim=None, camera_distance=None, resolution=None, scale=1.0):
+        with tempfile.NamedTemporaryFile(suffix=".obj", delete=False) as tmp_mesh:
+            mesh_path = tmp_mesh.name
+            tmp_mesh.close()
+        
+        mesh = self.save_mesh()
+        mesh.export(mesh_path)
+        
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp_out:
+            output_path = tmp_out.name
+            tmp_out.close()
+            
+        blender_script = os.path.join(os.path.dirname(__file__), 'blender_render.py')
+        
+        res = resolution[0] if isinstance(resolution, (list, tuple)) else resolution
+        
+        cmd = [
+            'blender', '-b', '-P', blender_script, '--',
+            '--mesh', mesh_path,
+            '--output', output_path,
+            '--elev', str(elev),
+            '--azim', str(azim),
+            '--scale', str(scale),
+            '--resolution', str(res)
+        ]
+        
+        subprocess.run(cmd, check=True)
+        
+        image = Image.open(output_path)
+        image = torch.tensor(np.array(image) / 255.0).float().to(self.device)
+        
+        if os.path.exists(mesh_path):
+            os.remove(mesh_path)
+        if os.path.exists(output_path):
+            os.remove(output_path)
+            
+        return image
 
     def raster_antialias(self, color, rast, pos, tri, topology_hash=None, pos_gradient_boost=1.0):
 
@@ -235,6 +267,31 @@ class MeshRender():
                       vtx_uv=vtx_uv, uv_idx=uv_idx,
                       scale_factor=scale_factor, auto_center=auto_center
                       )
+
+        if hasattr(mesh.visual, 'material'):
+            
+            # 3. Access the material object
+            material = mesh.visual.material
+            
+            # 4. Access the image (Returns a PIL Image object)
+            # Note: For PBR materials (like GLTF), this might be 'baseColorTexture'
+            if hasattr(material, 'image'):
+                texture_image = material.image
+            elif hasattr(material, 'baseColorTexture'):
+                texture_image = material.baseColorTexture
+
+            if texture_image:
+                print(f"Texture found: {texture_image.format}, Size: {texture_image.size}")
+                
+                # You can now save it or display it using standard PIL methods
+                texture_data = texture_image 
+                # texture_image.save("extracted_texture.png")
+            else:
+                print("Material exists, but no image data found (possibly just colors).")
+
+        else:
+            print("No material data found on this mesh.")                      
+                      
         if texture_data is not None:
             self.set_texture(texture_data)
 
@@ -350,7 +407,6 @@ class MeshRender():
 
     def _render(
         self,
-        glctx,
         mvp,
         pos,
         pos_idx,
@@ -360,32 +416,13 @@ class MeshRender():
         resolution,
         max_mip_level,
         keep_alpha,
-        filter_mode
+        filter_mode,
+        elev=None,
+        azim=None,
+        camera_distance=None,
+        scale=1.0
     ):
-        pos_clip = transform_pos(mvp, pos)
-        if isinstance(resolution, (int, float)):
-            resolution = [resolution, resolution]
-        rast_out, rast_out_db = self.raster_rasterize(
-            glctx, pos_clip, pos_idx, resolution=resolution)
-
-        tex = tex.contiguous()
-        if filter_mode == 'linear-mipmap-linear':
-            texc, texd = self.raster_interpolate(
-                uv[None, ...], rast_out, uv_idx, rast_db=rast_out_db, diff_attrs='all')
-            color = self.raster_texture(
-                tex[None, ...], texc, texd, filter_mode='linear-mipmap-linear', max_mip_level=max_mip_level)
-        else:
-            texc, _ = self.raster_interpolate(uv[None, ...], rast_out, uv_idx)
-            color = self.raster_texture(tex[None, ...], texc, filter_mode=filter_mode)
-
-        visible_mask = torch.clamp(rast_out[..., -1:], 0, 1)
-        color = color * visible_mask  # Mask out background.
-        if self.use_antialias:
-            color = self.raster_antialias(color, rast_out, pos_clip, pos_idx)
-
-        if keep_alpha:
-            color = torch.cat([color, visible_mask], dim=-1)
-        return color[0, ...]
+        return self.raster_texture(tex, uv, elev=elev, azim=azim, camera_distance=camera_distance, resolution=resolution, scale=scale)
 
     def render(
         self,
@@ -398,7 +435,8 @@ class MeshRender():
         keep_alpha=True,
         bgcolor=None,
         filter_mode=None,
-        return_type='th'
+        return_type='th',
+        scale=1.0
     ):
 
         proj = self.camera_proj_mat
@@ -419,7 +457,8 @@ class MeshRender():
         image = self._render(r_mvp, self.vtx_pos, self.pos_idx, self.vtx_uv, self.uv_idx,
                              self.tex if tex is None else tex,
                              self.default_resolution if resolution is None else resolution,
-                             self.max_mip_level, True, filter_mode if filter_mode else self.filter_mode)
+                             self.max_mip_level, True, filter_mode if filter_mode else self.filter_mode,
+                             elev=elev, azim=azim, camera_distance=camera_distance,scale=scale)
         mask = (image[..., [-1]] == 1).float()
         if bgcolor is None:
             bgcolor = [0 for _ in range(image.shape[-1] - 1)]

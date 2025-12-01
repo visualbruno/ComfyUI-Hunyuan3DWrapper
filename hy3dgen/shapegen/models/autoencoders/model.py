@@ -58,7 +58,7 @@ class VectsetVAE(nn.Module):
         model_kwargs.update(kwargs)
 
         model = cls(**model_kwargs)
-        model.load_state_dict(ckpt)
+        model.load_state_dict(ckpt, strict=False)
         model.to(device=device, dtype=dtype)
         return model
 
