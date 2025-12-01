@@ -781,10 +781,11 @@ class Hy3DRenderMultiView:
                 "trimesh": ("TRIMESH",),
                 "render_size": ("INT", {"default": 1024, "min": 64, "max": 4096, "step": 16}),
                 "texture_size": ("INT", {"default": 1024, "min": 64, "max": 4096, "step": 16}),
-                "blender_exec_path": ("STRING",{"default": ""}),
+                
                 "generate_textured_maps": ("BOOLEAN", {"default":False, "tooltip":"Uses Blender to generate the views. Put Blender folder in your PATH"}),
             },
             "optional": {
+                "blender_exec_path": ("STRING",{"default": ""}),
                 "camera_config": ("HY3DCAMERA",),
                 "normal_space": (["world", "tangent"], {"default": "world"}),
             }
@@ -795,7 +796,7 @@ class Hy3DRenderMultiView:
     FUNCTION = "process"
     CATEGORY = "Hunyuan3DWrapper"
 
-    def process(self, trimesh, render_size, texture_size, blender_exec_path, generate_textured_maps, camera_config=None, normal_space="world"):
+    def process(self, trimesh, render_size, texture_size, generate_textured_maps, camera_config=None, normal_space="world", blender_exec_path=None):
         if camera_config is None:
             selected_camera_azims = [0, 90, 180, 270, 0, 180]
             selected_camera_elevs = [0, 0, 0, 0, 90, -90]
@@ -847,7 +848,7 @@ class Hy3DRenderMultiView:
             selected_camera_elevs, selected_camera_azims)
         position_tensors = torch.stack(position_maps, dim=0)
         
-        if generate_textured_maps:            
+        if generate_textured_maps and blender_exec_path:
             if hasattr(trimesh.visual, 'material'):               
                 textured_maps = self.render_textured_multiview(
                     selected_camera_elevs, selected_camera_azims, ortho_scale, render_size, blender_exec_path)
