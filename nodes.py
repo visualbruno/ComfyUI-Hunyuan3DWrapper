@@ -769,7 +769,7 @@ class Hy3DMeshUVWrap:
 
     def process(self, trimesh):
         from .hy3dgen.texgen.utils.uv_warp_utils import mesh_uv_wrap
-        trimesh = mesh_uv_wrap(trimesh)
+        trimesh = trimesh.unwrap()
         
         return (trimesh,)
 
