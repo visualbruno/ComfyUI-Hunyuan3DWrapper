@@ -84,6 +84,9 @@ def setup_lighting():
     bg_node.inputs['Strength'].default_value = 1.0
     
     bpy.context.scene.view_settings.view_transform = 'Standard'
+    
+    bpy.context.scene.cycles.max_bounces = 8
+    bpy.context.scene.cycles.diffuse_bounces = 4 # How many times light reflects off diffuse surfaces
 
 def auto_center_and_scale(obj, norm_size):
     """
@@ -204,7 +207,10 @@ def render_scene(output_path, resolution, rendering):
     bpy.context.scene.render.filepath = abs_output_path
     bpy.context.scene.render.use_file_extension = False
     
-    bpy.context.scene.cycles.samples = 64 
+    bpy.context.scene.cycles.samples = 512
+    bpy.context.scene.cycles.preview_samples = 32
+
+    bpy.context.scene.cycles.use_denoising = True
     
     print(f"Rendering to: {abs_output_path}")
     bpy.ops.render.render(write_still=True)
