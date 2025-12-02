@@ -426,6 +426,74 @@ class MeshRender():
     ):
         return self.raster_texture(tex, uv, elev=elev, azim=azim, camera_distance=camera_distance, resolution=resolution, scale=scale, blender_exec_path=blender_exec_path)
 
+    def render_all_views(
+        self,
+        camera_config=None,
+        camera_distance=None,
+        center=None,
+        resolution=None,
+        tex=None,
+        keep_alpha=True,
+        bgcolor=None,
+        filter_mode=None,
+        return_type='th',
+        scale=1.0,
+        blender_exec_path=None
+    ):
+
+        proj = self.camera_proj_mat
+        r_mv = get_mv_matrix(
+            elev=elev,
+            azim=azim,
+            camera_distance=self.camera_distance if camera_distance is None else camera_distance,
+            center=center)
+        r_mvp = np.matmul(proj, r_mv).astype(np.float32)
+        if tex is not None:
+            if isinstance(tex, Image.Image):
+                tex = torch.tensor(np.array(tex) / 255.0)
+            elif isinstance(tex, np.ndarray):
+                tex = torch.tensor(tex)
+            if tex.dim() == 2:
+                tex = tex.unsqueeze(-1)
+            tex = tex.float().to(self.device)
+            
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp_out:
+            output_path = tmp_out.name
+            tmp_out.close()
+            
+        blender_script = os.path.join(os.path.dirname(__file__), 'blender_render.py')
+        
+        res = resolution[0] if isinstance(resolution, (list, tuple)) else resolution
+        
+        cmd = [
+            blender_exec_path, '-b', '-P', blender_script, '--',
+            '--mesh', mesh_path,
+            '--output', output_path,
+            '--camera_config', str(camera_config),
+            '--scale', str(scale),
+            '--resolution', str(res)
+        ]
+        
+        subprocess.run(cmd, check=True)    
+        image = self._render(r_mvp, self.vtx_pos, self.pos_idx, self.vtx_uv, self.uv_idx,
+                             self.tex if tex is None else tex,
+                             self.default_resolution if resolution is None else resolution,
+                             self.max_mip_level, True, filter_mode if filter_mode else self.filter_mode,
+                             elev=elev, azim=azim, camera_distance=camera_distance,scale=scale,blender_exec_path=blender_exec_path)
+        mask = (image[..., [-1]] == 1).float()
+        if bgcolor is None:
+            bgcolor = [0 for _ in range(image.shape[-1] - 1)]
+        image = image * mask + (1 - mask) * \
+                torch.tensor(bgcolor + [0]).to(self.device)
+        if keep_alpha == False:
+            image = image[..., :-1]
+        if return_type == 'np':
+            image = image.cpu().numpy()
+        elif return_type == 'pl':
+            image = image.squeeze(-1).cpu().numpy() * 255
+            image = Image.fromarray(image.astype(np.uint8))
+        return image
+
     def render(
         self,
         elev,
@@ -434,7 +502,7 @@ class MeshRender():
         center=None,
         resolution=None,
         tex=None,
-        keep_alpha=True,
+        keep_alpha=False,
         bgcolor=None,
         filter_mode=None,
         return_type='th',

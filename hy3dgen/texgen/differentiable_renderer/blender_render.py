@@ -7,29 +7,29 @@ import os
 def reset_scene():
     bpy.ops.wm.read_factory_settings(use_empty=True)
 
-def configure_gpu():
-    """
-    Ensures the script uses the GPU for rendering if available, falling back to CPU.
-    """
-    bpy.context.scene.cycles.device = 'GPU'
-    prefs = bpy.context.preferences
-    cprefs = prefs.addons['cycles'].preferences
+def configure_gpu(rendering):    
+    if rendering == 'GPU':    
+        bpy.context.scene.cycles.device = 'GPU'
+        prefs = bpy.context.preferences
+        cprefs = prefs.addons['cycles'].preferences
 
-    for compute_device_type in ('OPTIX', 'CUDA', 'HIP', 'METAL'):
-        try:
-            cprefs.compute_device_type = compute_device_type
-            cprefs.get_devices()
-            devices = cprefs.devices
-            if devices:
-                print(f"Blender: Found {compute_device_type} devices:")
-                for device in devices:
-                    device.use = True
-                    print(f"    - Activated: {device.name}")
-                return
-        except Exception as e:
-            continue
-    print("Blender: No GPU found, falling back to CPU.")
-    bpy.context.scene.cycles.device = 'CPU'
+        for compute_device_type in ('OPTIX', 'CUDA', 'HIP', 'METAL'):
+            try:
+                cprefs.compute_device_type = compute_device_type
+                cprefs.get_devices()
+                devices = cprefs.devices
+                if devices:
+                    print(f"Blender: Found {compute_device_type} devices:")
+                    for device in devices:
+                        device.use = True
+                        print(f"    - Activated: {device.name}")
+                    return
+            except Exception as e:
+                continue
+        print("Blender: No GPU found, falling back to CPU.")
+        bpy.context.scene.cycles.device = 'CPU'
+    else:
+        bpy.context.scene.cycles.device = 'CPU'
 
 def set_camera(elev, azim, distance, scale, clip_start=0.1, clip_end=100):
     # Location calculation
@@ -189,14 +189,14 @@ def import_mesh(mesh_path):
     # Return the first imported mesh object
     return bpy.context.view_layer.objects.active
 
-def render_scene(output_path, resolution):
+def render_scene(output_path, resolution, rendering):
     abs_output_path = os.path.abspath(output_path)
     output_dir = os.path.dirname(abs_output_path)
     if output_dir and not os.path.exists(output_dir):
         os.makedirs(output_dir, exist_ok=True)
 
     bpy.context.scene.render.engine = 'CYCLES'
-    configure_gpu()
+    configure_gpu(rendering)
     
     bpy.context.scene.render.resolution_x = resolution
     bpy.context.scene.render.resolution_y = resolution
@@ -226,6 +226,7 @@ def main():
     # New argument for normalization size
     parser.add_argument('--norm_size', type=float, default=1.15, help="Target size for Max Radius * 2.0")
     parser.add_argument('--resolution', type=int, default=1024)
+    parser.add_argument('--rendering', default="GPU")
     
     args = parser.parse_args(argv)
     
@@ -242,7 +243,7 @@ def main():
     set_camera(args.elev, args.azim, args.distance, args.scale)
     setup_lighting()
     
-    render_scene(args.output, args.resolution)
+    render_scene(args.output, args.resolution, args.rendering)
 
 if __name__ == "__main__":
     main()
