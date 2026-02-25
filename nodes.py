@@ -3713,7 +3713,98 @@ class Hy3DHighPolyToLowPolyBatchWithMetaData:
                 project_textures, project_weighted_cos_maps)
         else:
             raise f'no method {method}'
-        return texture, ori_trust_map > 1E-8        
+        return texture, ori_trust_map > 1E-8     
+
+class Hy3DBatchSimplifyAndExport:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "trimesh": ("TRIMESH",),
+                "method": (["Hy3D","Meshlib","Cumesh"],{"default":"Hy3D"}),
+                "target_face_nums": ("STRING",),
+                "filename_prefix": ("STRING",),
+                "file_format": (["glb", "obj", "ply", "stl", "3mf", "dae"],),
+            },
+        }
+
+    RETURN_TYPES = ("STRING",)
+    RETURN_NAMES = ("lst_glb_path",)
+    FUNCTION = "process"
+    CATEGORY = "Hunyuan3D21Wrapper"
+    OUTPUT_NODE = True
+
+    def process(self, method, trimesh, target_face_nums, filename_prefix, file_format):
+        lst_output_mesh = []
+        list_of_faces = parse_string_to_int_list(target_face_nums)            
+        nb_target_faces = len(list_of_faces)
+        if nb_target_faces>0:                
+            for target_nbfaces in list_of_faces:
+                mesh_copy = trimesh.copy()
+                vertices = mesh_copy.vertices
+                faces = mesh_copy.faces   
+                
+                print(f"Processing at {target_nbfaces} ...")                
+                if method == "Hy3D":
+                    try:
+                        import pyfqmr
+                    except ImportError:
+                        raise ImportError("pyfqmr not found. Please install it using 'pip install pyfqmr' https://github.com/Kramer84/pyfqmr-Fast-Quadric-Mesh-Reduction")
+                    
+                    mesh_simplifier = pyfqmr.Simplify()
+                    mesh_simplifier.setMesh(vertices, faces)
+                    mesh_simplifier.simplify_mesh(
+                        target_count=target_nbfaces, 
+                        aggressiveness=2,
+                        update_rate=5,
+                        max_iterations=1000,
+                        preserve_border=True, 
+                        verbose=True,
+                        lossless=False,
+                        threshold_lossless=0.001
+                        )
+                    mesh_copy.vertices, mesh_copy.faces, _ = mesh_simplifier.getMesh()
+                    log.info(f"Simplified mesh to {target_nbfaces} vertices, resulting in {mesh_copy.vertices.shape[0]} vertices and {mesh_copy.faces.shape[0]} faces")                      
+                elif method == "Meshlib":
+                    try:
+                        import meshlib.mrmeshpy as mrmeshpy
+                    except ImportError:
+                        raise ImportError("meshlib not found. Please install it using 'pip install meshlib'")
+
+                    current_faces_num = len(faces)
+                    settings = mrmeshpy.DecimateSettings()
+                    faces_to_delete = current_faces_num - target_nbfaces
+                    settings.maxDeletedFaces = faces_to_delete                        
+                    settings.packMesh = True
+                    
+                    print('Decimating ...')
+                    mesh_copy = postprocessmesh(vertices, faces, settings)                    
+                elif method == "Cumesh":
+                    try:
+                        import cumesh as CuMesh
+                    except:
+                        raise ImportError("Cumesh not found. Please install it")
+                        
+                    cumesh = CuMesh.CuMesh()
+                    cumesh.init(torch.from_numpy(vertices).float().cuda(), torch.from_numpy(faces).int().cuda())
+                    cumesh.simplify(target_nbfaces, verbose=True)
+                    new_vertices, new_faces = cumesh.read()
+                    mesh_copy.vertices = new_vertices.cpu().numpy()
+                    mesh_copy.faces = new_faces.cpu().numpy()
+                    
+                    del cumesh
+
+                filename_prefix_with_nbfaces = f"{filename_prefix}_{target_nbfaces}"
+
+                full_output_folder, filename, counter, subfolder, filename_prefix_with_nbfaces = folder_paths.get_save_image_path(filename_prefix_with_nbfaces, folder_paths.get_output_directory())                
+                output_glb_path = Path(full_output_folder, f'{filename}_{counter:05}_.{file_format}')
+                output_glb_path.parent.mkdir(exist_ok=True)
+                
+                mesh_copy.export(output_glb_path, file_type=file_format)
+                
+                lst_output_mesh.append(str(output_glb_path))                
+        
+        return (lst_output_mesh,)           
 
 NODE_CLASS_MAPPINGS = {
     "Hy3DModelLoader": Hy3DModelLoader,
@@ -3756,6 +3847,7 @@ NODE_CLASS_MAPPINGS = {
     "Hy3DHighPolyToLowPolyApplyTexture": Hy3DHighPolyToLowPolyApplyTexture,
     "Hy3DSampleMultiViewsBatchWithMetaData": Hy3DSampleMultiViewsBatchWithMetaData,
     "Hy3DHighPolyToLowPolyBatchWithMetaData": Hy3DHighPolyToLowPolyBatchWithMetaData,
+    "Hy3DBatchSimplifyAndExport": Hy3DBatchSimplifyAndExport,
     }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -3799,4 +3891,5 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "Hy3DHighPolyToLowPolyApplyTexture": "Hy3D HighPoly To LowPoly ApplyTexture",
     "Hy3DSampleMultiViewsBatchWithMetaData": "Hy3D Sample MultiView from Folder with MetaData",
     "Hy3DHighPolyToLowPolyBatchWithMetaData": "Hy3D HighPoly To LowPoly Batch from Folder with MetaData",
+    "Hy3DBatchSimplifyAndExport": "Hy3D Batch Simplify and Export",
     }
