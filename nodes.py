@@ -1356,7 +1356,8 @@ class Hy3DLoadMesh:
     def INPUT_TYPES(s):
         return {
             "required": {
-                "glb_path": ("STRING", {"default": "", "tooltip": "The glb path with mesh to load."}), 
+                "glb_path": ("STRING", {"default": "", "tooltip": "The glb path with mesh to load."}),
+                "only_vertices_and_faces": ("BOOLEAN",{"default":False}),
             }
         }
     RETURN_TYPES = ("TRIMESH",)
@@ -1367,12 +1368,15 @@ class Hy3DLoadMesh:
     CATEGORY = "Hunyuan3DWrapper"
     DESCRIPTION = "Loads a glb model from the given path."
 
-    def load(self, glb_path):
+    def load(self, glb_path, only_vertices_and_faces):
 
         if not os.path.exists(glb_path):
             glb_path = os.path.join(folder_paths.get_input_directory(), glb_path)
         
         trimesh = Trimesh.load(glb_path, force="mesh")
+        
+        if only_vertices_and_faces:
+            trimesh = Trimesh.Trimesh(vertices=trimesh.vertices,faces=trimesh.faces)
         
         return (trimesh,)
 
