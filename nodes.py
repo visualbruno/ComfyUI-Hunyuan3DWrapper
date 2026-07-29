@@ -3804,7 +3804,139 @@ class Hy3DBatchSimplifyAndExport:
                 
                 lst_output_mesh.append(str(output_glb_path))                
         
-        return (lst_output_mesh,)           
+        return (lst_output_mesh,)    
+
+class Hy3DMiniTurboModelLoader:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+            },
+            "optional": {
+            }
+        }
+
+    RETURN_TYPES = ("HY3DMODEL", "HY3DVAE")
+    RETURN_NAMES = ("pipeline", "vae")
+    FUNCTION = "loadmodel"
+    CATEGORY = "Hunyuan3DWrapper"
+
+    def loadmodel(self):
+        device = mm.get_torch_device()
+        offload_device=mm.unet_offload_device()
+
+        model_path = os.path.join(folder_paths.models_dir, "diffusion_models", "hunyuan3d-dit-v2-mini-turbo-fp16.safetensors")
+        if not os.path.exists(model_path):
+            print('Downloading model ...')
+            from huggingface_hub import hf_hub_download
+            import shutil
+
+            repo_id = "tencent/Hunyuan3D-2mini"
+            target_dir = os.path.join(folder_paths.models_dir, "diffusion_models")
+            os.makedirs(target_dir, exist_ok=True)
+
+            os.environ.setdefault("HF_HUB_ENABLE_HF_TRANSFER", "1")
+
+            repo_filename = "hunyuan3d-dit-v2-mini-turbo/model.fp16.safetensors"
+            desired_filename = "hunyuan3d-dit-v2-mini-turbo-fp16.safetensors"
+
+            print(f"downloading {repo_filename} ...")
+            downloaded_path = hf_hub_download(
+                repo_id=repo_id,
+                filename=repo_filename,
+                local_dir=target_dir,
+                local_dir_use_symlinks=False,
+            )
+
+            final_path = os.path.join(target_dir, desired_filename)
+            shutil.move(downloaded_path, final_path)
+            print(f"{repo_filename} -> {final_path}")
+
+            # clean up the now-empty subfolder created by hf_hub_download
+            subfolder = os.path.dirname(downloaded_path)
+            try:
+                os.rmdir(subfolder)
+            except OSError:
+                pass  # not empty, or already gone             
+        
+        pipe, vae = Hunyuan3DDiTFlowMatchingPipeline.from_single_file(
+            ckpt_path=model_path,  
+            use_safetensors=True, 
+            device=device, 
+            offload_device=offload_device,
+            compile_args=None,
+            attention_mode="sdpa",
+            cublas_ops=False,
+            is_mini_turbo = True)
+            
+        model_path = os.path.join(folder_paths.models_dir, "vae", "hunyuan3d-vae-v2-mini-fp16.safetensors")
+        if not os.path.exists(model_path):
+            print('Downloading model ...')
+            from huggingface_hub import hf_hub_download
+            import shutil
+
+            repo_id = "tencent/Hunyuan3D-2mini"
+            target_dir = os.path.join(folder_paths.models_dir, "vae")
+            os.makedirs(target_dir, exist_ok=True)
+
+            os.environ.setdefault("HF_HUB_ENABLE_HF_TRANSFER", "1")
+
+            repo_filename = "hunyuan3d-vae-v2-mini/model.fp16.safetensors"
+            desired_filename = "hunyuan3d-vae-v2-mini-fp16.safetensors"
+
+            print(f"downloading {repo_filename} ...")
+            downloaded_path = hf_hub_download(
+                repo_id=repo_id,
+                filename=repo_filename,
+                local_dir=target_dir,
+                local_dir_use_symlinks=False,
+            )
+
+            final_path = os.path.join(target_dir, desired_filename)
+            shutil.move(downloaded_path, final_path)
+            print(f"{repo_filename} -> {final_path}")
+
+            # clean up the now-empty subfolder created by hf_hub_download
+            subfolder = os.path.dirname(downloaded_path)
+            try:
+                os.rmdir(subfolder)
+            except OSError:
+                pass  # not empty, or already gone
+
+        vae_sd = load_torch_file(model_path)
+        geo_decoder_mlp_expand_ratio: 4
+  
+        mlp_expand_ratio = 4
+        downsample_ratio = 1
+        geo_decoder_ln_post = True
+        if "geo_decoder.ln_post.weight" not in vae_sd:
+            log.info("Turbo VAE detected")
+            geo_decoder_ln_post = False
+            mlp_expand_ratio = 1
+            downsample_ratio = 2
+            
+
+        config = {
+            'num_latents': 3072,
+            'embed_dim': 64,
+            'num_freqs': 8,
+            'include_pi': False,
+            'heads': 16,
+            'width': 1024,
+            'num_decoder_layers': 16,
+            'qkv_bias': False,
+            'qk_norm': True,
+            'scale_factor': 0.9990943042622529,
+            'geo_decoder_mlp_expand_ratio': mlp_expand_ratio,
+            'geo_decoder_downsample_ratio': downsample_ratio,
+            'geo_decoder_ln_post': geo_decoder_ln_post
+        }
+
+        vae = ShapeVAE(**config)
+        vae.load_state_dict(vae_sd)
+        vae.eval().to(torch.float16)            
+        
+        return (pipe, vae,)        
 
 NODE_CLASS_MAPPINGS = {
     "Hy3DModelLoader": Hy3DModelLoader,
@@ -3848,6 +3980,7 @@ NODE_CLASS_MAPPINGS = {
     "Hy3DSampleMultiViewsBatchWithMetaData": Hy3DSampleMultiViewsBatchWithMetaData,
     "Hy3DHighPolyToLowPolyBatchWithMetaData": Hy3DHighPolyToLowPolyBatchWithMetaData,
     "Hy3DBatchSimplifyAndExport": Hy3DBatchSimplifyAndExport,
+    "Hy3DMiniTurboModelLoader": Hy3DMiniTurboModelLoader
     }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -3892,4 +4025,5 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "Hy3DSampleMultiViewsBatchWithMetaData": "Hy3D Sample MultiView from Folder with MetaData",
     "Hy3DHighPolyToLowPolyBatchWithMetaData": "Hy3D HighPoly To LowPoly Batch from Folder with MetaData",
     "Hy3DBatchSimplifyAndExport": "Hy3D Batch Simplify and Export",
+    "Hy3DMiniTurboModelLoader": "Hy3D - Mini Turbo Model Loader",
     }
